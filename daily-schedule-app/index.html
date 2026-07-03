@@ -52,6 +52,8 @@
     box-shadow: var(--shadow);
   }
   .card h2 { font-size: 1rem; margin-bottom: 12px; }
+  .card h2 .h2-note { font-size: .8rem; font-weight: 600; color: var(--text-sub); }
+  #todo-form { margin-top: 12px; }
 
   /* サマリー */
   .summary-grid {
@@ -260,6 +262,17 @@
     <div class="empty" id="empty-msg">まだ予定がありません。フォームから追加するか、Googleカレンダーから読み込んでください。</div>
   </section>
 
+  <!-- To Doリスト -->
+  <section class="card">
+    <h2>✅ To Doリスト <span class="h2-note" id="todo-note"></span></h2>
+    <ul class="schedule" id="todo-list"></ul>
+    <div class="empty" id="todo-empty">To Doはまだありません。終わらなかったものは翌日に持ち越されます。</div>
+    <form id="todo-form">
+      <input type="text" id="todo-title" placeholder="やることを入力(例:領収書を提出)" required maxlength="100">
+      <button type="submit">追加</button>
+    </form>
+  </section>
+
   <!-- 今後の予定 -->
   <section class="card">
     <h2>🗓 今後の予定</h2>
@@ -289,10 +302,12 @@
 
   const todayKey = dateKeyOf(new Date());
   const STORAGE_KEY = 'daily-schedule:events';
+  const TODOS_KEY = 'daily-schedule:todos';
   const CLIENT_ID_KEY = 'daily-schedule:gcal-client-id';
   const SYNC_DAYS_AHEAD = 7; // GCal から取り込む日数(今日を含めて +7日)
 
   let events = load();
+  let todos = loadTodos();
 
   function load() {
     try {
@@ -319,6 +334,22 @@
   }
   function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+  }
+
+  // To Do: 未完了は翌日に持ち越し、完了済みは日付が変わったら掃除する
+  function loadTodos() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(TODOS_KEY)) || { date: todayKey, items: [] };
+      if (stored.date !== todayKey) {
+        stored.items = stored.items.filter(t => !t.done);
+        stored.date = todayKey;
+        localStorage.setItem(TODOS_KEY, JSON.stringify(stored));
+      }
+      return stored.items;
+    } catch { return []; }
+  }
+  function saveTodos() {
+    localStorage.setItem(TODOS_KEY, JSON.stringify({ date: todayKey, items: todos }));
   }
 
   // 日付表示
@@ -460,6 +491,41 @@
     });
     document.getElementById('future-empty').style.display = future.length ? 'none' : 'block';
 
+    // --- To Doリスト ---
+    const todoList = document.getElementById('todo-list');
+    todoList.innerHTML = '';
+    todos.forEach(todo => {
+      const li = document.createElement('li');
+      li.className = 'item' + (todo.done ? ' done' : '');
+
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.checked = !!todo.done;
+      check.title = '完了にする';
+      check.addEventListener('change', () => { todo.done = check.checked; saveTodos(); render(); });
+
+      const title = document.createElement('span');
+      title.className = 'title';
+      title.textContent = todo.title;
+
+      const del = document.createElement('button');
+      del.className = 'del';
+      del.textContent = '✕';
+      del.title = '削除';
+      del.addEventListener('click', () => {
+        todos.splice(todos.indexOf(todo), 1);
+        saveTodos();
+        render();
+      });
+
+      li.append(check, title, del);
+      todoList.appendChild(li);
+    });
+    document.getElementById('todo-empty').style.display = todos.length ? 'none' : 'block';
+    const todoDone = todos.filter(t => t.done).length;
+    document.getElementById('todo-note').textContent =
+      todos.length ? `(${todoDone}/${todos.length} 完了)` : '';
+
     // --- 統計 ---
     const done = todays.filter(e => e.done).length;
     document.getElementById('stat-total').textContent = todays.length;
@@ -500,6 +566,19 @@
     render();
     document.getElementById('input-title').value = '';
     document.getElementById('input-title').focus();
+  });
+
+  // To Do追加
+  document.getElementById('todo-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const input = document.getElementById('todo-title');
+    const title = input.value.trim();
+    if (!title) return;
+    todos.push({ title, done: false });
+    saveTodos();
+    render();
+    input.value = '';
+    input.focus();
   });
 
   // ---- Googleカレンダー連携 ----
@@ -632,7 +711,7 @@
   // ---- まとめ・削除 ----
 
   document.getElementById('copy-btn').addEventListener('click', async () => {
-    if (!events.length) { toast('予定がありません'); return; }
+    if (!events.length && !todos.length) { toast('予定もTo Doもありません'); return; }
     const todays = events.filter(e => e.date === todayKey);
     const future = events.filter(e => e.date > todayKey);
     const dateStr = d.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
@@ -643,6 +722,11 @@
       todays.forEach(e => lines.push(`${e.done ? '✅' : '⬜'} ${displayTime(e)} ${e.title}`));
     } else {
       lines.push('(今日の予定はありません)');
+    }
+    if (todos.length) {
+      lines.push('');
+      lines.push(`✅ To Do(${todos.filter(t => t.done).length}/${todos.length} 完了)`);
+      todos.forEach(t => lines.push(`${t.done ? '✅' : '⬜'} ${t.title}`));
     }
     if (future.length) {
       lines.push('');
@@ -666,10 +750,12 @@
   });
 
   document.getElementById('clear-btn').addEventListener('click', () => {
-    if (!events.length) return;
-    if (confirm('今日と今後の予定をすべて削除しますか?')) {
+    if (!events.length && !todos.length) return;
+    if (confirm('予定とTo Doをすべて削除しますか?')) {
       events = [];
+      todos = [];
       save();
+      saveTodos();
       render();
     }
   });
