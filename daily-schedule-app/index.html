@@ -103,6 +103,25 @@
     color: var(--accent);
     border: 1px solid var(--accent);
   }
+  button:disabled { opacity: .5; cursor: wait; }
+
+  /* Googleカレンダー連携 */
+  .gcal-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .gcal-row .grow { flex: 1 1 auto; }
+  #gcal-settings { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  #gcal-settings label { font-size: .85rem; color: var(--text-sub); }
+  #gcal-settings input {
+    flex: 0 0 auto;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: .9rem;
+  }
+  #gcal-settings .hint { font-size: .8rem; color: var(--text-sub); }
+  #gcal-settings .hint a { color: var(--accent); }
 
   /* 予定リスト */
   ul.schedule { list-style: none; display: flex; flex-direction: column; gap: 8px; }
@@ -122,8 +141,17 @@
     color: var(--accent);
     flex-shrink: 0;
     width: 52px;
+    font-size: .95rem;
   }
   li.item .title { flex: 1; word-break: break-word; }
+  li.item .badge {
+    flex-shrink: 0;
+    font-size: .7rem;
+    color: var(--text-sub);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+  }
   li.item.done .title { text-decoration: line-through; color: var(--done); }
   li.item.done .time { color: var(--done); }
   li.item input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
@@ -152,6 +180,7 @@
     opacity: 0;
     transition: opacity .3s;
     pointer-events: none;
+    max-width: 90vw;
   }
   .toast.show { opacity: 1; }
 </style>
@@ -173,6 +202,23 @@
     <div class="next-event" id="next-event">予定を追加すると、次の予定がここに表示されます</div>
   </section>
 
+  <!-- Googleカレンダー連携 -->
+  <section class="card">
+    <div class="gcal-row">
+      <button id="gcal-sync" class="grow">🗓 Googleカレンダーから読み込み</button>
+      <button class="secondary" id="gcal-settings-toggle" title="連携設定">⚙ 設定</button>
+    </div>
+    <div id="gcal-settings" hidden>
+      <label for="gcal-client-id">OAuth クライアントID(初回のみ設定)</label>
+      <input type="text" id="gcal-client-id" placeholder="例: 123456789-xxxx.apps.googleusercontent.com" autocomplete="off">
+      <button id="gcal-save">保存</button>
+      <p class="hint">
+        Google Cloud Console で作成した「OAuth クライアントID(ウェブアプリケーション)」を入力してください。
+        取得手順は同梱の README.md にあります。IDはこのブラウザ内(localStorage)にのみ保存されます。
+      </p>
+    </div>
+  </section>
+
   <!-- 追加フォーム -->
   <section class="card">
     <form id="add-form">
@@ -185,7 +231,7 @@
   <!-- 予定リスト -->
   <section class="card">
     <ul class="schedule" id="schedule-list"></ul>
-    <div class="empty" id="empty-msg">まだ予定がありません。上のフォームから追加してください。</div>
+    <div class="empty" id="empty-msg">まだ予定がありません。フォームから追加するか、Googleカレンダーから読み込んでください。</div>
   </section>
 
   <!-- 操作 -->
@@ -203,14 +249,15 @@
 
   const todayKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const STORAGE_KEY = 'daily-schedule:' + todayKey;
+  const CLIENT_ID_KEY = 'daily-schedule:gcal-client-id';
 
   let events = load();
 
   function load() {
     try {
-      // 過去日のデータを掃除
+      // 過去日のデータを掃除(設定キーは残す)
       Object.keys(localStorage)
-        .filter(k => k.startsWith('daily-schedule:') && k !== STORAGE_KEY)
+        .filter(k => /^daily-schedule:\d{4}-\d{2}-\d{2}$/.test(k) && k !== STORAGE_KEY)
         .forEach(k => localStorage.removeItem(k));
       return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
     } catch { return []; }
@@ -229,22 +276,29 @@
     return new Date().toTimeString().slice(0, 5);
   }
 
+  function displayTime(ev) {
+    return ev.allDay ? '終日' : ev.time;
+  }
+
   function render() {
-    events.sort((a, b) => a.time.localeCompare(b.time));
+    // 終日イベントを先頭に、あとは時刻順
+    events.sort((a, b) =>
+      ((a.allDay ? 0 : 1) - (b.allDay ? 0 : 1)) || a.time.localeCompare(b.time));
 
     const list = document.getElementById('schedule-list');
     list.innerHTML = '';
     const now = nowHM();
 
-    // 「現在の予定」= 開始済みで、次の予定がまだ始まっていないもの
-    let currentIdx = -1;
-    events.forEach((ev, i) => {
-      if (ev.time <= now && (i === events.length - 1 || events[i + 1].time > now)) currentIdx = i;
+    // 「現在の予定」= 開始済みで、次の時間指定予定がまだ始まっていないもの(終日は除く)
+    const timed = events.filter(e => !e.allDay);
+    let currentEv = null;
+    timed.forEach((ev, i) => {
+      if (ev.time <= now && (i === timed.length - 1 || timed[i + 1].time > now)) currentEv = ev;
     });
 
     events.forEach((ev, i) => {
       const li = document.createElement('li');
-      li.className = 'item' + (ev.done ? ' done' : '') + (i === currentIdx && !ev.done ? ' now' : '');
+      li.className = 'item' + (ev.done ? ' done' : '') + (ev === currentEv && !ev.done ? ' now' : '');
 
       const check = document.createElement('input');
       check.type = 'checkbox';
@@ -254,19 +308,29 @@
 
       const time = document.createElement('span');
       time.className = 'time';
-      time.textContent = ev.time;
+      time.textContent = displayTime(ev);
 
       const title = document.createElement('span');
       title.className = 'title';
       title.textContent = ev.title;
+
+      li.append(check, time, title);
+
+      if (ev.gcalId) {
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = 'GCal';
+        badge.title = 'Googleカレンダーから読み込んだ予定';
+        li.appendChild(badge);
+      }
 
       const del = document.createElement('button');
       del.className = 'del';
       del.textContent = '✕';
       del.title = '削除';
       del.addEventListener('click', () => { events.splice(i, 1); save(); render(); });
+      li.appendChild(del);
 
-      li.append(check, time, title, del);
       list.appendChild(li);
     });
 
@@ -278,9 +342,9 @@
     document.getElementById('stat-done').textContent = done;
     document.getElementById('stat-remain').textContent = events.length - done;
 
-    // 次の予定
+    // 次の予定(終日は対象外)
     const nextEl = document.getElementById('next-event');
-    const next = events.find(e => !e.done && e.time > now);
+    const next = events.find(e => !e.done && !e.allDay && e.time > now);
     if (next) {
       nextEl.innerHTML = '⏰ 次の予定:<strong></strong>';
       nextEl.querySelector('strong').textContent = ` ${next.time} ${next.title}`;
@@ -306,13 +370,137 @@
     document.getElementById('input-title').focus();
   });
 
-  // まとめをコピー
+  // ---- Googleカレンダー連携 ----
+
+  const settingsPanel = document.getElementById('gcal-settings');
+  const clientIdInput = document.getElementById('gcal-client-id');
+
+  document.getElementById('gcal-settings-toggle').addEventListener('click', () => {
+    settingsPanel.hidden = !settingsPanel.hidden;
+    if (!settingsPanel.hidden) {
+      clientIdInput.value = localStorage.getItem(CLIENT_ID_KEY) || '';
+      clientIdInput.focus();
+    }
+  });
+
+  document.getElementById('gcal-save').addEventListener('click', () => {
+    const id = clientIdInput.value.trim();
+    if (!id) {
+      localStorage.removeItem(CLIENT_ID_KEY);
+      toast('クライアントIDを削除しました');
+    } else if (!/\.apps\.googleusercontent\.com$/.test(id)) {
+      toast('クライアントIDの形式が正しくないようです(.apps.googleusercontent.com で終わる文字列)');
+      return;
+    } else {
+      localStorage.setItem(CLIENT_ID_KEY, id);
+      toast('クライアントIDを保存しました');
+    }
+    settingsPanel.hidden = true;
+  });
+
+  // Google Identity Services を必要になったときだけ読み込む
+  function loadGis() {
+    return new Promise((resolve, reject) => {
+      if (window.google && window.google.accounts && window.google.accounts.oauth2) return resolve();
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Google認証スクリプトを読み込めませんでした(ネットワークを確認してください)'));
+      document.head.appendChild(s);
+    });
+  }
+
+  function requestAccessToken(clientId) {
+    return new Promise((resolve, reject) => {
+      const tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/calendar.readonly',
+        callback: resp => resp.error
+          ? reject(new Error(resp.error_description || resp.error))
+          : resolve(resp.access_token),
+        error_callback: err => reject(new Error(
+          err && err.type === 'popup_closed' ? 'ログインがキャンセルされました' : (err && err.message) || '認証に失敗しました')),
+      });
+      tokenClient.requestAccessToken();
+    });
+  }
+
+  async function fetchTodayEvents(token) {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(); end.setHours(23, 59, 59, 999);
+    const params = new URLSearchParams({
+      timeMin: start.toISOString(),
+      timeMax: end.toISOString(),
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: '100',
+    });
+    const res = await fetch(
+      'https://www.googleapis.com/calendar/v3/calendars/primary/events?' + params,
+      { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('カレンダーの取得に失敗しました (HTTP ' + res.status + ')');
+    return (await res.json()).items || [];
+  }
+
+  const syncBtn = document.getElementById('gcal-sync');
+  syncBtn.addEventListener('click', async () => {
+    const clientId = localStorage.getItem(CLIENT_ID_KEY);
+    if (!clientId) {
+      settingsPanel.hidden = false;
+      clientIdInput.focus();
+      toast('先に ⚙ 設定 から OAuth クライアントIDを登録してください');
+      return;
+    }
+    if (location.protocol === 'file:') {
+      toast('file:// では認証できません。README の手順でローカルサーバー経由で開いてください');
+      return;
+    }
+    syncBtn.disabled = true;
+    try {
+      await loadGis();
+      const token = await requestAccessToken(clientId);
+      const items = await fetchTodayEvents(token);
+
+      let added = 0, updated = 0;
+      for (const item of items) {
+        if (item.status === 'cancelled') continue;
+        const allDay = !(item.start && item.start.dateTime);
+        const time = allDay ? '00:00' : new Date(item.start.dateTime).toTimeString().slice(0, 5);
+        const title = item.summary || '(無題)';
+        const existing = events.find(e => e.gcalId === item.id);
+        if (existing) {
+          // タイトルや時刻の変更を反映(完了状態は保持)
+          if (existing.time !== time || existing.title !== title || existing.allDay !== allDay) {
+            existing.time = time;
+            existing.title = title;
+            existing.allDay = allDay;
+            updated++;
+          }
+        } else {
+          events.push({ time, title, done: false, allDay, gcalId: item.id });
+          added++;
+        }
+      }
+      save();
+      render();
+      toast(added || updated
+        ? `Googleカレンダーから ${added} 件追加` + (updated ? `・${updated} 件更新` : '') + 'しました'
+        : '新しい予定はありませんでした');
+    } catch (e) {
+      toast('連携エラー: ' + e.message);
+    } finally {
+      syncBtn.disabled = false;
+    }
+  });
+
+  // ---- まとめ・削除 ----
+
   document.getElementById('copy-btn').addEventListener('click', async () => {
     if (!events.length) { toast('予定がありません'); return; }
     const dateStr = d.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
     const lines = [
       `📋 ${dateStr} の予定(${events.filter(e => e.done).length}/${events.length} 完了)`,
-      ...events.map(e => `${e.done ? '✅' : '⬜'} ${e.time} ${e.title}`),
+      ...events.map(e => `${e.done ? '✅' : '⬜'} ${displayTime(e)} ${e.title}`),
     ];
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -322,7 +510,6 @@
     }
   });
 
-  // 全削除
   document.getElementById('clear-btn').addEventListener('click', () => {
     if (!events.length) return;
     if (confirm('今日の予定をすべて削除しますか?')) {
@@ -336,7 +523,8 @@
     const t = document.getElementById('toast');
     t.textContent = msg;
     t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2000);
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => t.classList.remove('show'), 3000);
   }
 
   // 1分ごとに「現在の予定」ハイライトを更新
