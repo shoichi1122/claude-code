@@ -2,7 +2,7 @@ name: Deploy schedule app to GitHub Pages
 
 on:
   push:
-    branches: [claude/daily-schedule-app-ga3o91]
+    branches: [main]
     paths:
       - 'daily-schedule-app/**'
       - '.github/workflows/deploy-schedule-app.yml'
