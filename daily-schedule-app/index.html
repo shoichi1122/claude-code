@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>今日の予定まとめ</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --text: #1a1d21;
+    --text-sub: #6b7280;
+    --border: #e5e7eb;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --done: #9ca3af;
+    --danger: #dc2626;
+    --shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418;
+      --card: #1c2128;
+      --text: #e6e8eb;
+      --text-sub: #9aa4b2;
+      --border: #2d333b;
+      --accent: #60a5fa;
+      --accent-soft: #1e3a5f;
+      --done: #6b7280;
+      --danger: #f87171;
+      --shadow: 0 1px 3px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 16px;
+  }
+  .container { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+  header h1 { font-size: 1.3rem; }
+  header .date { color: var(--text-sub); font-size: .95rem; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+  .card h2 { font-size: 1rem; margin-bottom: 12px; }
+  .card h2 .h2-note { font-size: .8rem; font-weight: 600; color: var(--text-sub); }
+  #todo-form { margin-top: 12px; }
+
+  /* サマリー */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .stat {
+    text-align: center;
+    padding: 8px 4px;
+    border-radius: 8px;
+    background: var(--bg);
+  }
+  .stat .num { font-size: 1.5rem; font-weight: 700; }
+  .stat .label { font-size: .75rem; color: var(--text-sub); }
+  .next-event {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    font-size: .9rem;
+  }
+  .next-event strong { color: var(--accent); }
+
+  /* 入力フォーム */
+  form { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type="date"], input[type="time"], input[type="text"] {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1rem;
+  }
+  input[type="date"], input[type="time"] { flex: 0 0 auto; }
+  form input[type="text"] { flex: 1 1 160px; min-width: 0; }
+  button {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: .95rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { opacity: .9; }
+  button.secondary {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  button:disabled { opacity: .5; cursor: wait; }
+
+  /* Googleカレンダー連携 */
+  .gcal-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .gcal-row .grow { flex: 1 1 auto; }
+  #gcal-settings { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  #gcal-settings[hidden] { display: none; }
+  #gcal-settings label { font-size: .85rem; color: var(--text-sub); }
+  #gcal-settings input {
+    flex: 0 0 auto;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: .9rem;
+  }
+  #gcal-settings .hint { font-size: .8rem; color: var(--text-sub); }
+
+  /* 予定リスト */
+  ul.schedule { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  li.item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+  }
+  li.item.now { border-color: var(--accent); background: var(--accent-soft); }
+  li.item .time {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--accent);
+    flex-shrink: 0;
+    width: 52px;
+    font-size: .95rem;
+  }
+  li.item .title { flex: 1; word-break: break-word; }
+  li.item .badge {
+    flex-shrink: 0;
+    font-size: .7rem;
+    color: var(--text-sub);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+  }
+  li.item.done .title { text-decoration: line-through; color: var(--done); }
+  li.item.done .time { color: var(--done); }
+  li.item input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+  li.item .del {
+    background: none;
+    border: none;
+    color: var(--text-sub);
+    font-size: 1.1rem;
+    padding: 4px 8px;
+    cursor: pointer;
+  }
+  li.item .del:hover { color: var(--danger); }
+  .empty { text-align: center; color: var(--text-sub); padding: 24px 0; }
+
+  /* 今後の予定 */
+  .day-group { margin-bottom: 12px; }
+  .day-group:last-child { margin-bottom: 0; }
+  .day-header {
+    font-size: .85rem;
+    font-weight: 700;
+    color: var(--text-sub);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .day-header .rel {
+    font-weight: 600;
+    font-size: .75rem;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 999px;
+    padding: 0 8px;
+  }
+  #future-empty { text-align: center; color: var(--text-sub); padding: 8px 0; font-size: .9rem; }
+
+  .actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text);
+    color: var(--card);
+    padding: 10px 20px;
+    border-radius: 999px;
+    font-size: .9rem;
+    opacity: 0;
+    transition: opacity .3s;
+    pointer-events: none;
+    max-width: 90vw;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>📋 今日の予定まとめ</h1>
+    <div class="date" id="today-date"></div>
+  </header>
+
+  <!-- サマリー -->
+  <section class="card">
+    <div class="summary-grid">
+      <div class="stat"><div class="num" id="stat-total">0</div><div class="label">今日</div></div>
+      <div class="stat"><div class="num" id="stat-done">0</div><div class="label">完了</div></div>
+      <div class="stat"><div class="num" id="stat-remain">0</div><div class="label">残り</div></div>
+      <div class="stat"><div class="num" id="stat-future">0</div><div class="label">今後</div></div>
+    </div>
+    <div class="next-event" id="next-event">予定を追加すると、次の予定がここに表示されます</div>
+  </section>
+
+  <!-- Googleカレンダー連携 -->
+  <section class="card">
+    <div class="gcal-row">
+      <button id="gcal-sync" class="grow">🗓 Googleカレンダーから読み込み(今日+7日分)</button>
+      <button class="secondary" id="gcal-settings-toggle" title="連携設定">⚙ 設定</button>
+    </div>
+    <div id="gcal-settings" hidden>
+      <label for="gcal-client-id">OAuth クライアントID(初回のみ設定)</label>
+      <input type="text" id="gcal-client-id" placeholder="例: 123456789-xxxx.apps.googleusercontent.com" autocomplete="off">
+      <button id="gcal-save">保存</button>
+      <p class="hint">
+        Google Cloud Console で作成した「OAuth クライアントID(ウェブアプリケーション)」を入力してください。
+        取得手順は同梱の README.md にあります。IDはこのブラウザ内(localStorage)にのみ保存されます。
+      </p>
+    </div>
+  </section>
+
+  <!-- 追加フォーム -->
+  <section class="card">
+    <form id="add-form">
+      <input type="date" id="input-date" required>
+      <input type="time" id="input-time" required>
+      <input type="text" id="input-title" placeholder="予定を入力(例:チームミーティング)" required maxlength="100">
+      <button type="submit">追加</button>
+    </form>
+  </section>
+
+  <!-- 今日の予定リスト -->
+  <section class="card">
+    <h2>📌 今日の予定</h2>
+    <ul class="schedule" id="schedule-list"></ul>
+    <div class="empty" id="empty-msg">まだ予定がありません。フォームから追加するか、Googleカレンダーから読み込んでください。</div>
+  </section>
+
+  <!-- To Doリスト -->
+  <section class="card">
+    <h2>✅ To Doリスト <span class="h2-note" id="todo-note"></span></h2>
+    <ul class="schedule" id="todo-list"></ul>
+    <div class="empty" id="todo-empty">To Doはまだありません。終わらなかったものは翌日に持ち越されます。</div>
+    <form id="todo-form">
+      <input type="text" id="todo-title" placeholder="やることを入力(例:領収書を提出)" required maxlength="100">
+      <button type="submit">追加</button>
+    </form>
+  </section>
+
+  <!-- 今後の予定 -->
+  <section class="card">
+    <h2>🗓 今後の予定</h2>
+    <div id="future-list"></div>
+    <div id="future-empty">今後の予定はありません</div>
+  </section>
+
+  <!-- 操作 -->
+  <div class="actions">
+    <button class="secondary" id="copy-btn">📄 まとめをコピー</button>
+    <button class="secondary" id="clear-btn">🗑 全て削除</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ローカルタイムゾーンでの YYYY-MM-DD(toISOString は UTC 基準のため使わない)
+  function dateKeyOf(d) {
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0');
+  }
+
+  const todayKey = dateKeyOf(new Date());
+  const STORAGE_KEY = 'daily-schedule:events';
+  const TODOS_KEY = 'daily-schedule:todos';
+  const CLIENT_ID_KEY = 'daily-schedule:gcal-client-id';
+  const SYNC_DAYS_AHEAD = 7; // GCal から取り込む日数(今日を含めて +7日)
+
+  let events = load();
+  let todos = loadTodos();
+
+  function load() {
+    try {
+      let list = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+
+      // 旧形式(daily-schedule:YYYY-MM-DD)からの移行
+      Object.keys(localStorage)
+        .filter(k => /^daily-schedule:\d{4}-\d{2}-\d{2}$/.test(k))
+        .forEach(k => {
+          if (k === 'daily-schedule:' + todayKey) {
+            try {
+              const old = JSON.parse(localStorage.getItem(k)) || [];
+              old.forEach(e => list.push(Object.assign({ date: todayKey }, e)));
+            } catch { /* 壊れた旧データは捨てる */ }
+          }
+          localStorage.removeItem(k);
+        });
+
+      // 過去の予定は自動で掃除
+      list = list.filter(e => e.date >= todayKey);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+      return list;
+    } catch { return []; }
+  }
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+  }
+
+  // To Do: 未完了は翌日に持ち越し、完了済みは日付が変わったら掃除する
+  function loadTodos() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(TODOS_KEY)) || { date: todayKey, items: [] };
+      if (stored.date !== todayKey) {
+        stored.items = stored.items.filter(t => !t.done);
+        stored.date = todayKey;
+        localStorage.setItem(TODOS_KEY, JSON.stringify(stored));
+      }
+      return stored.items;
+    } catch { return []; }
+  }
+  function saveTodos() {
+    localStorage.setItem(TODOS_KEY, JSON.stringify({ date: todayKey, items: todos }));
+  }
+
+  // 日付表示
+  const d = new Date();
+  document.getElementById('today-date').textContent =
+    d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+
+  // 追加フォームの日付は今日を初期値に(過去は選べない)
+  const dateInput = document.getElementById('input-date');
+  dateInput.value = todayKey;
+  dateInput.min = todayKey;
+
+  function nowHM() {
+    return new Date().toTimeString().slice(0, 5);
+  }
+
+  function displayTime(ev) {
+    return ev.allDay ? '終日' : ev.time;
+  }
+
+  // "YYYY-MM-DD" → "7月4日(土)" 形式
+  function formatDateLabel(dateStr) {
+    const [y, m, day] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, day)
+      .toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
+  }
+
+  // 今日から何日後かの相対ラベル("明日" / "明後日" / "3日後")
+  function relativeLabel(dateStr) {
+    const toDate = s => { const [y, m, day] = s.split('-').map(Number); return new Date(y, m - 1, day); };
+    const diff = Math.round((toDate(dateStr) - toDate(todayKey)) / 86400000);
+    if (diff === 1) return '明日';
+    if (diff === 2) return '明後日';
+    return diff + '日後';
+  }
+
+  function sortEvents(list) {
+    return list.sort((a, b) =>
+      a.date.localeCompare(b.date) ||
+      ((a.allDay ? 0 : 1) - (b.allDay ? 0 : 1)) ||
+      a.time.localeCompare(b.time));
+  }
+
+  function makeItem(ev, withCheckbox) {
+    const li = document.createElement('li');
+    li.className = 'item' + (ev.done ? ' done' : '');
+
+    if (withCheckbox) {
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.checked = !!ev.done;
+      check.title = '完了にする';
+      check.addEventListener('change', () => { ev.done = check.checked; save(); render(); });
+      li.appendChild(check);
+    }
+
+    const time = document.createElement('span');
+    time.className = 'time';
+    time.textContent = displayTime(ev);
+
+    const title = document.createElement('span');
+    title.className = 'title';
+    title.textContent = ev.title;
+
+    li.append(time, title);
+
+    if (ev.gcalId) {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = 'GCal';
+      badge.title = 'Googleカレンダーから読み込んだ予定';
+      li.appendChild(badge);
+    }
+
+    const del = document.createElement('button');
+    del.className = 'del';
+    del.textContent = '✕';
+    del.title = '削除';
+    del.addEventListener('click', () => {
+      events.splice(events.indexOf(ev), 1);
+      save();
+      render();
+    });
+    li.appendChild(del);
+
+    return li;
+  }
+
+  function render() {
+    sortEvents(events);
+    const todays = events.filter(e => e.date === todayKey);
+    const future = events.filter(e => e.date > todayKey);
+    const now = nowHM();
+
+    // --- 今日の予定 ---
+    const list = document.getElementById('schedule-list');
+    list.innerHTML = '';
+
+    // 「現在の予定」= 開始済みで、次の時間指定予定がまだ始まっていないもの(終日は除く)
+    const timed = todays.filter(e => !e.allDay);
+    let currentEv = null;
+    timed.forEach((ev, i) => {
+      if (ev.time <= now && (i === timed.length - 1 || timed[i + 1].time > now)) currentEv = ev;
+    });
+
+    todays.forEach(ev => {
+      const li = makeItem(ev, true);
+      if (ev === currentEv && !ev.done) li.classList.add('now');
+      list.appendChild(li);
+    });
+    document.getElementById('empty-msg').style.display = todays.length ? 'none' : 'block';
+
+    // --- 今後の予定(日付ごとにグループ表示)---
+    const futureBox = document.getElementById('future-list');
+    futureBox.innerHTML = '';
+    const byDate = new Map();
+    future.forEach(ev => {
+      if (!byDate.has(ev.date)) byDate.set(ev.date, []);
+      byDate.get(ev.date).push(ev);
+    });
+    byDate.forEach((dayEvents, dateStr) => {
+      const group = document.createElement('div');
+      group.className = 'day-group';
+
+      const header = document.createElement('div');
+      header.className = 'day-header';
+      header.textContent = formatDateLabel(dateStr);
+      const rel = document.createElement('span');
+      rel.className = 'rel';
+      rel.textContent = relativeLabel(dateStr);
+      header.appendChild(rel);
+
+      const ul = document.createElement('ul');
+      ul.className = 'schedule';
+      dayEvents.forEach(ev => ul.appendChild(makeItem(ev, false)));
+
+      group.append(header, ul);
+      futureBox.appendChild(group);
+    });
+    document.getElementById('future-empty').style.display = future.length ? 'none' : 'block';
+
+    // --- To Doリスト ---
+    const todoList = document.getElementById('todo-list');
+    todoList.innerHTML = '';
+    todos.forEach(todo => {
+      const li = document.createElement('li');
+      li.className = 'item' + (todo.done ? ' done' : '');
+
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.checked = !!todo.done;
+      check.title = '完了にする';
+      check.addEventListener('change', () => { todo.done = check.checked; saveTodos(); render(); });
+
+      const title = document.createElement('span');
+      title.className = 'title';
+      title.textContent = todo.title;
+
+      const del = document.createElement('button');
+      del.className = 'del';
+      del.textContent = '✕';
+      del.title = '削除';
+      del.addEventListener('click', () => {
+        todos.splice(todos.indexOf(todo), 1);
+        saveTodos();
+        render();
+      });
+
+      li.append(check, title, del);
+      todoList.appendChild(li);
+    });
+    document.getElementById('todo-empty').style.display = todos.length ? 'none' : 'block';
+    const todoDone = todos.filter(t => t.done).length;
+    document.getElementById('todo-note').textContent =
+      todos.length ? `(${todoDone}/${todos.length} 完了)` : '';
+
+    // --- 統計 ---
+    const done = todays.filter(e => e.done).length;
+    document.getElementById('stat-total').textContent = todays.length;
+    document.getElementById('stat-done').textContent = done;
+    document.getElementById('stat-remain').textContent = todays.length - done;
+    document.getElementById('stat-future').textContent = future.length;
+
+    // --- 次の予定 ---
+    const nextEl = document.getElementById('next-event');
+    const nextToday = todays.find(e => !e.done && !e.allDay && e.time > now);
+    const nextFuture = future.find(e => !e.allDay) || future[0];
+    if (nextToday) {
+      nextEl.innerHTML = '⏰ 次の予定:<strong></strong>';
+      nextEl.querySelector('strong').textContent = ` ${nextToday.time} ${nextToday.title}`;
+    } else if (nextFuture) {
+      nextEl.innerHTML = '📅 次の予定:<strong></strong>';
+      nextEl.querySelector('strong').textContent =
+        ` ${formatDateLabel(nextFuture.date)} ${displayTime(nextFuture)} ${nextFuture.title}`;
+    } else if (todays.length && todays.every(e => e.done)) {
+      nextEl.textContent = '🎉 今日の予定はすべて完了しました!';
+    } else if (todays.length) {
+      nextEl.textContent = 'これから始まる予定はありません';
+    } else {
+      nextEl.textContent = '予定を追加すると、次の予定がここに表示されます';
+    }
+  }
+
+  // 追加
+  document.getElementById('add-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const date = dateInput.value;
+    const time = document.getElementById('input-time').value;
+    const title = document.getElementById('input-title').value.trim();
+    if (!date || !time || !title) return;
+    if (date < todayKey) { toast('過去の日付には追加できません'); return; }
+    events.push({ date, time, title, done: false });
+    save();
+    render();
+    document.getElementById('input-title').value = '';
+    document.getElementById('input-title').focus();
+  });
+
+  // To Do追加
+  document.getElementById('todo-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const input = document.getElementById('todo-title');
+    const title = input.value.trim();
+    if (!title) return;
+    todos.push({ title, done: false });
+    saveTodos();
+    render();
+    input.value = '';
+    input.focus();
+  });
+
+  // ---- Googleカレンダー連携 ----
+
+  const settingsPanel = document.getElementById('gcal-settings');
+  const clientIdInput = document.getElementById('gcal-client-id');
+
+  document.getElementById('gcal-settings-toggle').addEventListener('click', () => {
+    settingsPanel.hidden = !settingsPanel.hidden;
+    if (!settingsPanel.hidden) {
+      clientIdInput.value = localStorage.getItem(CLIENT_ID_KEY) || '';
+      clientIdInput.focus();
+    }
+  });
+
+  document.getElementById('gcal-save').addEventListener('click', () => {
+    const id = clientIdInput.value.trim();
+    if (!id) {
+      localStorage.removeItem(CLIENT_ID_KEY);
+      toast('クライアントIDを削除しました');
+    } else if (!/\.apps\.googleusercontent\.com$/.test(id)) {
+      toast('クライアントIDの形式が正しくないようです(.apps.googleusercontent.com で終わる文字列)');
+      return;
+    } else {
+      localStorage.setItem(CLIENT_ID_KEY, id);
+      toast('クライアントIDを保存しました');
+    }
+    settingsPanel.hidden = true;
+  });
+
+  // Google Identity Services を必要になったときだけ読み込む
+  function loadGis() {
+    return new Promise((resolve, reject) => {
+      if (window.google && window.google.accounts && window.google.accounts.oauth2) return resolve();
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Google認証スクリプトを読み込めませんでした(ネットワークを確認してください)'));
+      document.head.appendChild(s);
+    });
+  }
+
+  function requestAccessToken(clientId) {
+    return new Promise((resolve, reject) => {
+      const tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/calendar.readonly',
+        callback: resp => resp.error
+          ? reject(new Error(resp.error_description || resp.error))
+          : resolve(resp.access_token),
+        error_callback: err => reject(new Error(
+          err && err.type === 'popup_closed' ? 'ログインがキャンセルされました' : (err && err.message) || '認証に失敗しました')),
+      });
+      tokenClient.requestAccessToken();
+    });
+  }
+
+  async function fetchUpcomingEvents(token) {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(); end.setDate(end.getDate() + SYNC_DAYS_AHEAD); end.setHours(23, 59, 59, 999);
+    const params = new URLSearchParams({
+      timeMin: start.toISOString(),
+      timeMax: end.toISOString(),
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: '250',
+    });
+    const res = await fetch(
+      'https://www.googleapis.com/calendar/v3/calendars/primary/events?' + params,
+      { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('カレンダーの取得に失敗しました (HTTP ' + res.status + ')');
+    return (await res.json()).items || [];
+  }
+
+  const syncBtn = document.getElementById('gcal-sync');
+  syncBtn.addEventListener('click', async () => {
+    const clientId = localStorage.getItem(CLIENT_ID_KEY);
+    if (!clientId) {
+      settingsPanel.hidden = false;
+      clientIdInput.focus();
+      toast('先に ⚙ 設定 から OAuth クライアントIDを登録してください');
+      return;
+    }
+    if (location.protocol === 'file:') {
+      toast('file:// では認証できません。README の手順でローカルサーバー経由で開いてください');
+      return;
+    }
+    syncBtn.disabled = true;
+    try {
+      await loadGis();
+      const token = await requestAccessToken(clientId);
+      const items = await fetchUpcomingEvents(token);
+
+      let added = 0, updated = 0;
+      for (const item of items) {
+        if (item.status === 'cancelled') continue;
+        const allDay = !(item.start && item.start.dateTime);
+        const date = allDay ? item.start.date : dateKeyOf(new Date(item.start.dateTime));
+        if (!date || date < todayKey) continue;
+        const time = allDay ? '00:00' : new Date(item.start.dateTime).toTimeString().slice(0, 5);
+        const title = item.summary || '(無題)';
+        const existing = events.find(e => e.gcalId === item.id);
+        if (existing) {
+          // 日付・時刻・タイトルの変更を反映(完了状態は保持)
+          if (existing.date !== date || existing.time !== time ||
+              existing.title !== title || existing.allDay !== allDay) {
+            existing.date = date;
+            existing.time = time;
+            existing.title = title;
+            existing.allDay = allDay;
+            updated++;
+          }
+        } else {
+          events.push({ date, time, title, done: false, allDay, gcalId: item.id });
+          added++;
+        }
+      }
+      save();
+      render();
+      toast(added || updated
+        ? `Googleカレンダーから ${added} 件追加` + (updated ? `・${updated} 件更新` : '') + 'しました'
+        : '新しい予定はありませんでした');
+    } catch (e) {
+      toast('連携エラー: ' + e.message);
+    } finally {
+      syncBtn.disabled = false;
+    }
+  });
+
+  // ---- まとめ・削除 ----
+
+  document.getElementById('copy-btn').addEventListener('click', async () => {
+    if (!events.length && !todos.length) { toast('予定もTo Doもありません'); return; }
+    const todays = events.filter(e => e.date === todayKey);
+    const future = events.filter(e => e.date > todayKey);
+    const dateStr = d.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
+
+    const lines = [];
+    lines.push(`📋 ${dateStr} の予定(${todays.filter(e => e.done).length}/${todays.length} 完了)`);
+    if (todays.length) {
+      todays.forEach(e => lines.push(`${e.done ? '✅' : '⬜'} ${displayTime(e)} ${e.title}`));
+    } else {
+      lines.push('(今日の予定はありません)');
+    }
+    if (todos.length) {
+      lines.push('');
+      lines.push(`✅ To Do(${todos.filter(t => t.done).length}/${todos.length} 完了)`);
+      todos.forEach(t => lines.push(`${t.done ? '✅' : '⬜'} ${t.title}`));
+    }
+    if (future.length) {
+      lines.push('');
+      lines.push('🗓 今後の予定');
+      let lastDate = '';
+      future.forEach(e => {
+        if (e.date !== lastDate) {
+          lines.push(`▼ ${formatDateLabel(e.date)}`);
+          lastDate = e.date;
+        }
+        lines.push(`・${displayTime(e)} ${e.title}`);
+      });
+    }
+
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      toast('まとめをコピーしました');
+    } catch {
+      toast('コピーに失敗しました');
+    }
+  });
+
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    if (!events.length && !todos.length) return;
+    if (confirm('予定とTo Doをすべて削除しますか?')) {
+      events = [];
+      todos = [];
+      save();
+      saveTodos();
+      render();
+    }
+  });
+
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  // 1分ごとに「現在の予定」ハイライトを更新。日付が変わったら再読み込み
+  setInterval(() => {
+    if (dateKeyOf(new Date()) !== todayKey) { location.reload(); return; }
+    render();
+  }, 60 * 1000);
+
+  render();
+})();
+</script>
+</body>
+</html>
