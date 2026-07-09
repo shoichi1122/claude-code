@@ -190,6 +190,7 @@
     padding: 0 8px;
   }
   #future-empty { text-align: center; color: var(--text-sub); padding: 8px 0; font-size: .9rem; }
+  .show-more { width: 100%; margin-top: 4px; }
 
   .actions { display: flex; gap: 8px; justify-content: flex-end; }
   .toast {
@@ -231,7 +232,7 @@
   <!-- Googleカレンダー連携 -->
   <section class="card">
     <div class="gcal-row">
-      <button id="gcal-sync" class="grow">🗓 Googleカレンダーから読み込み(今日+7日分)</button>
+      <button id="gcal-sync" class="grow">🗓 Googleカレンダーから読み込み(今後1年分)</button>
       <button class="secondary" id="gcal-settings-toggle" title="連携設定">⚙ 設定</button>
     </div>
     <div id="gcal-settings" hidden>
@@ -304,7 +305,12 @@
   const STORAGE_KEY = 'daily-schedule:events';
   const TODOS_KEY = 'daily-schedule:todos';
   const CLIENT_ID_KEY = 'daily-schedule:gcal-client-id';
-  const SYNC_DAYS_AHEAD = 7; // GCal から取り込む日数(今日を含めて +7日)
+  const SYNC_DAYS_AHEAD = 365;    // GCal から取り込む日数(今日を含めて +1年)
+  const MAX_SYNC_ITEMS = 2000;    // 取り込み件数の安全上限
+  const FUTURE_PREVIEW_DAYS = 14; // 今後の予定を最初から展開して見せる日数
+  const COPY_AHEAD_DAYS = 7;      // まとめコピーに含める今後の予定の日数
+
+  let showAllFuture = false;
 
   let events = load();
   let todos = loadTodos();
@@ -370,20 +376,30 @@
     return ev.allDay ? '終日' : ev.time;
   }
 
-  // "YYYY-MM-DD" → "7月4日(土)" 形式
+  // "YYYY-MM-DD" → "7月4日(土)" 形式(年が違うときは年も付ける)
   function formatDateLabel(dateStr) {
     const [y, m, day] = dateStr.split('-').map(Number);
-    return new Date(y, m - 1, day)
-      .toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
+    const opts = { month: 'long', day: 'numeric', weekday: 'short' };
+    if (y !== new Date().getFullYear()) opts.year = 'numeric';
+    return new Date(y, m - 1, day).toLocaleDateString('ja-JP', opts);
   }
 
-  // 今日から何日後かの相対ラベル("明日" / "明後日" / "3日後")
+  // 今日から何日後かの相対ラベル("明日" / "3日後" / "2週間後" / "3か月後")
   function relativeLabel(dateStr) {
     const toDate = s => { const [y, m, day] = s.split('-').map(Number); return new Date(y, m - 1, day); };
     const diff = Math.round((toDate(dateStr) - toDate(todayKey)) / 86400000);
     if (diff === 1) return '明日';
     if (diff === 2) return '明後日';
-    return diff + '日後';
+    if (diff <= 13) return diff + '日後';
+    if (diff < 60) return Math.round(diff / 7) + '週間後';
+    return Math.round(diff / 30) + 'か月後';
+  }
+
+  // 今日から n 日後の日付キー
+  function dateKeyAfter(n) {
+    const c = new Date();
+    c.setDate(c.getDate() + n);
+    return dateKeyOf(c);
   }
 
   function sortEvents(list) {
@@ -470,7 +486,13 @@
       if (!byDate.has(ev.date)) byDate.set(ev.date, []);
       byDate.get(ev.date).push(ev);
     });
+    const previewCutoff = dateKeyAfter(FUTURE_PREVIEW_DAYS);
+    let hiddenCount = 0;
     byDate.forEach((dayEvents, dateStr) => {
+      if (!showAllFuture && dateStr > previewCutoff) {
+        hiddenCount += dayEvents.length;
+        return;
+      }
       const group = document.createElement('div');
       group.className = 'day-group';
 
@@ -489,6 +511,21 @@
       group.append(header, ul);
       futureBox.appendChild(group);
     });
+
+    // 2週間より先の予定は折りたたみ表示
+    if (hiddenCount) {
+      const btn = document.createElement('button');
+      btn.className = 'secondary show-more';
+      btn.textContent = `これより先の予定もすべて表示(${hiddenCount}件)`;
+      btn.addEventListener('click', () => { showAllFuture = true; render(); });
+      futureBox.appendChild(btn);
+    } else if (showAllFuture && future.some(e => e.date > previewCutoff)) {
+      const btn = document.createElement('button');
+      btn.className = 'secondary show-more';
+      btn.textContent = '直近2週間の予定だけ表示';
+      btn.addEventListener('click', () => { showAllFuture = false; render(); });
+      futureBox.appendChild(btn);
+    }
     document.getElementById('future-empty').style.display = future.length ? 'none' : 'block';
 
     // --- To Doリスト ---
@@ -639,18 +676,26 @@
   async function fetchUpcomingEvents(token) {
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const end = new Date(); end.setDate(end.getDate() + SYNC_DAYS_AHEAD); end.setHours(23, 59, 59, 999);
-    const params = new URLSearchParams({
-      timeMin: start.toISOString(),
-      timeMax: end.toISOString(),
-      singleEvents: 'true',
-      orderBy: 'startTime',
-      maxResults: '250',
-    });
-    const res = await fetch(
-      'https://www.googleapis.com/calendar/v3/calendars/primary/events?' + params,
-      { headers: { Authorization: 'Bearer ' + token } });
-    if (!res.ok) throw new Error('カレンダーの取得に失敗しました (HTTP ' + res.status + ')');
-    return (await res.json()).items || [];
+    const items = [];
+    let pageToken = '';
+    do {
+      const params = new URLSearchParams({
+        timeMin: start.toISOString(),
+        timeMax: end.toISOString(),
+        singleEvents: 'true',
+        orderBy: 'startTime',
+        maxResults: '250',
+      });
+      if (pageToken) params.set('pageToken', pageToken);
+      const res = await fetch(
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events?' + params,
+        { headers: { Authorization: 'Bearer ' + token } });
+      if (!res.ok) throw new Error('カレンダーの取得に失敗しました (HTTP ' + res.status + ')');
+      const data = await res.json();
+      items.push(...(data.items || []));
+      pageToken = data.nextPageToken || '';
+    } while (pageToken && items.length < MAX_SYNC_ITEMS);
+    return items;
   }
 
   const syncBtn = document.getElementById('gcal-sync');
@@ -729,16 +774,23 @@
       todos.forEach(t => lines.push(`${t.done ? '✅' : '⬜'} ${t.title}`));
     }
     if (future.length) {
-      lines.push('');
-      lines.push('🗓 今後の予定');
-      let lastDate = '';
-      future.forEach(e => {
-        if (e.date !== lastDate) {
-          lines.push(`▼ ${formatDateLabel(e.date)}`);
-          lastDate = e.date;
-        }
-        lines.push(`・${displayTime(e)} ${e.title}`);
-      });
+      // コピーが長くなりすぎないよう、今後の予定は直近1週間分だけ載せる
+      const copyCutoff = dateKeyAfter(COPY_AHEAD_DAYS);
+      const included = future.filter(e => e.date <= copyCutoff);
+      const omitted = future.length - included.length;
+      if (included.length) {
+        lines.push('');
+        lines.push('🗓 今後の予定(1週間)');
+        let lastDate = '';
+        included.forEach(e => {
+          if (e.date !== lastDate) {
+            lines.push(`▼ ${formatDateLabel(e.date)}`);
+            lastDate = e.date;
+          }
+          lines.push(`・${displayTime(e)} ${e.title}`);
+        });
+        if (omitted) lines.push(`(これより先の予定 ${omitted} 件は省略)`);
+      }
     }
 
     try {
