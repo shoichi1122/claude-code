@@ -1,10 +1,11 @@
-name: Deploy schedule app to GitHub Pages
+name: Deploy apps to GitHub Pages
 
 on:
   push:
     branches: [main]
     paths:
       - 'daily-schedule-app/**'
+      - 'referral-sns-app/**'
       - '.github/workflows/deploy-schedule-app.yml'
   workflow_dispatch:
 
@@ -25,11 +26,16 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Assemble site (schedule app at root, referral app under /referral-sns-app/)
+        run: |
+          mkdir -p _site/referral-sns-app
+          cp -r daily-schedule-app/. _site/
+          cp -r referral-sns-app/. _site/referral-sns-app/
       - uses: actions/configure-pages@v5
         with:
           enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: daily-schedule-app
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
