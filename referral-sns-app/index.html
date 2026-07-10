@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SNSリファラル管理</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --text: #1a1d21;
+    --text-sub: #6b7280;
+    --border: #e5e7eb;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --danger: #dc2626;
+    --ig: #d6249f;
+    --ig-soft: #fbe4f3;
+    --th: #111418;
+    --th-soft: #e5e7eb;
+    --shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418;
+      --card: #1c2128;
+      --text: #e6e8eb;
+      --text-sub: #9aa4b2;
+      --border: #2d333b;
+      --accent: #60a5fa;
+      --accent-soft: #1e3a5f;
+      --danger: #f87171;
+      --ig: #f06bc7;
+      --ig-soft: #45203a;
+      --th: #e6e8eb;
+      --th-soft: #2d333b;
+      --shadow: 0 1px 3px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    background: var(--bg); color: var(--text);
+    max-width: 760px; margin: 0 auto; padding: 16px 16px 64px;
+    line-height: 1.6;
+  }
+  h1 { font-size: 1.3rem; margin: 8px 0 4px; }
+  .sub { color: var(--text-sub); font-size: .82rem; margin-bottom: 14px; }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .tabs button {
+    flex: 1; padding: 10px 4px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--card); color: var(--text-sub); font-size: .92rem; cursor: pointer;
+  }
+  .tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow); padding: 14px; margin-bottom: 14px;
+  }
+  .card h2 { font-size: 1rem; margin-bottom: 10px; }
+
+  label { display: block; font-size: .8rem; color: var(--text-sub); margin: 8px 0 2px; }
+  input[type=text], input[type=date], input[type=time], select, textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--bg); color: var(--text); font-size: .95rem; font-family: inherit;
+  }
+  textarea { min-height: 110px; resize: vertical; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; min-width: 0; }
+
+  button.primary {
+    margin-top: 12px; width: 100%; padding: 10px; border: none; border-radius: 10px;
+    background: var(--accent); color: #fff; font-size: .95rem; font-weight: 600; cursor: pointer;
+  }
+  button.small {
+    padding: 5px 10px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--card); color: var(--text); font-size: .8rem; cursor: pointer; white-space: nowrap;
+  }
+  button.small.accent { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  button.small.danger { color: var(--danger); }
+
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chip {
+    padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text-sub); font-size: .82rem; cursor: pointer;
+  }
+  .chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+  .channel-toggle { display: flex; gap: 6px; margin-bottom: 12px; }
+  .channel-toggle button {
+    flex: 1; padding: 8px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text-sub); font-size: .86rem; cursor: pointer;
+  }
+  .channel-toggle button.ig-active { background: var(--ig-soft); border-color: var(--ig); color: var(--ig); font-weight: 600; }
+  .channel-toggle button.th-active { background: var(--th-soft); border-color: var(--th); color: var(--th); font-weight: 600; }
+
+  .badge {
+    display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .72rem; font-weight: 600;
+    vertical-align: middle;
+  }
+  .badge.ig { background: var(--ig-soft); color: var(--ig); }
+  .badge.th { background: var(--th-soft); color: var(--th); }
+  .badge.cat { background: var(--accent-soft); color: var(--accent); }
+
+  .item { border-top: 1px solid var(--border); padding: 10px 0; }
+  .item:first-of-type { border-top: none; }
+  .item-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .item-title { font-weight: 600; font-size: .95rem; flex: 1; min-width: 120px; }
+  .item-body {
+    white-space: pre-wrap; font-size: .88rem; color: var(--text-sub);
+    background: var(--bg); border-radius: 8px; padding: 8px 10px; margin-top: 6px;
+  }
+  .item-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .meta { font-size: .78rem; color: var(--text-sub); }
+
+  .status-select { width: auto; font-size: .8rem; padding: 4px 6px; border-radius: 8px; }
+  .st-未送信 { color: var(--text-sub); }
+  .st-送信済み { color: var(--accent); }
+  .st-反応あり { color: #d97706; }
+  .st-返信済み { color: #7c3aed; }
+  .st-参加確定 { color: #059669; font-weight: 600; }
+  .st-見送り { color: var(--text-sub); text-decoration: line-through; }
+
+  .summary { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .summary div {
+    flex: 1; min-width: 90px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 10px; text-align: center;
+  }
+  .summary .num { font-size: 1.2rem; font-weight: 700; }
+  .summary .lbl { font-size: .72rem; color: var(--text-sub); }
+
+  .hint { font-size: .78rem; color: var(--text-sub); margin-top: 6px; }
+  .hint code { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+  .empty { color: var(--text-sub); font-size: .88rem; text-align: center; padding: 16px 0; }
+
+  dialog {
+    border: 1px solid var(--border); border-radius: 14px; background: var(--card); color: var(--text);
+    max-width: 560px; width: calc(100vw - 40px); padding: 18px;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h3 { font-size: 1rem; margin-bottom: 10px; }
+  .preview-text {
+    white-space: pre-wrap; font-size: .92rem; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 12px;
+  }
+  .dialog-actions { display: flex; gap: 8px; }
+  .dialog-actions button { flex: 1; padding: 10px; border-radius: 10px; font-size: .92rem; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text); }
+  .dialog-actions button.copy { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+  .footer-tools { display: flex; gap: 8px; justify-content: center; margin-top: 20px; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 8px 18px; border-radius: 999px;
+    font-size: .85rem; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 50;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<h1>📨 SNSリファラル管理</h1>
+<p class="sub">イベントごとの誘い文をInstagram送信用・Threads返信用で管理して、相手の名前を入れてワンタップでコピー</p>
+
+<div class="tabs">
+  <button id="tab-send" onclick="switchTab('send')">📤 送信リスト</button>
+  <button id="tab-tpl" onclick="switchTab('tpl')">📝 文面テンプレ</button>
+  <button id="tab-event" onclick="switchTab('event')">🎪 イベント</button>
+</div>
+
+<!-- ===== 送信リスト ===== -->
+<section id="view-send" hidden>
+  <div class="summary" id="send-summary"></div>
+
+  <div class="card">
+    <h2>➕ 送る相手を追加</h2>
+    <div class="row">
+      <div>
+        <label>相手の名前・アカウント名</label>
+        <input type="text" id="c-name" placeholder="例: @dance_lover / さきさん">
+      </div>
+      <div>
+        <label>SNS(送り方)</label>
+        <select id="c-channel">
+          <option value="ig">Instagram(こちらから送る)</option>
+          <option value="th">Threads(反応が来た人へ返信)</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>誘うイベント</label>
+        <select id="c-event"></select>
+      </div>
+      <div>
+        <label>メモ(任意)</label>
+        <input type="text" id="c-memo" placeholder="例: 前回も来てくれた">
+      </div>
+    </div>
+    <button class="primary" onclick="addContact()">リストに追加</button>
+  </div>
+
+  <div class="card">
+    <h2>📋 送信リスト</h2>
+    <div class="chips" id="send-filter"></div>
+    <div id="contact-list"></div>
+  </div>
+</section>
+
+<!-- ===== テンプレート ===== -->
+<section id="view-tpl" hidden>
+  <div class="channel-toggle">
+    <button id="ch-ig" onclick="setChannel('ig')">📷 Instagram<br><span class="meta">こちらから送る文</span></button>
+    <button id="ch-th" onclick="setChannel('th')">🧵 Threads<br><span class="meta">反応が来た人に送る文</span></button>
+  </div>
+  <div class="chips" id="tpl-cat-chips"></div>
+
+  <div class="card">
+    <div id="tpl-list"></div>
+  </div>
+
+  <div class="card">
+    <h2 id="tpl-form-title">➕ テンプレートを追加</h2>
+    <div class="row">
+      <div>
+        <label>イベント種別</label>
+        <input type="text" id="t-category" list="cat-list" placeholder="例: ダンスイベント">
+        <datalist id="cat-list"></datalist>
+      </div>
+      <div>
+        <label>テンプレ名</label>
+        <input type="text" id="t-title" placeholder="例: 初めての人向け">
+      </div>
+    </div>
+    <label>本文</label>
+    <textarea id="t-body" placeholder="こんにちは、{名前}さん!&#10;{日付}に{イベント名}を開催します…"></textarea>
+    <p class="hint">差し込みタグ: <code>{名前}</code> <code>{イベント名}</code> <code>{日付}</code> <code>{時間}</code> <code>{場所}</code> — コピー時に相手やイベントの情報に置き換わります</p>
+    <button class="primary" id="tpl-save-btn" onclick="saveTemplate()">保存</button>
+    <button class="small" id="tpl-cancel-btn" onclick="cancelEditTemplate()" style="width:100%; margin-top:8px; display:none;">編集をやめる</button>
+  </div>
+</section>
+
+<!-- ===== イベント ===== -->
+<section id="view-event" hidden>
+  <div class="card">
+    <h2>➕ イベントを追加</h2>
+    <div class="row">
+      <div>
+        <label>イベント名</label>
+        <input type="text" id="e-name" placeholder="例: SUMMER DANCE NIGHT">
+      </div>
+      <div>
+        <label>種別</label>
+        <input type="text" id="e-category" list="cat-list" placeholder="例: ダンスイベント">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>日付</label>
+        <input type="date" id="e-date">
+      </div>
+      <div>
+        <label>開始時間</label>
+        <input type="time" id="e-time">
+      </div>
+      <div>
+        <label>場所</label>
+        <input type="text" id="e-place" placeholder="例: 渋谷〇〇スタジオ">
+      </div>
+    </div>
+    <button class="primary" onclick="addEvent()">イベントを追加</button>
+  </div>
+
+  <div class="card">
+    <h2>🎪 イベント一覧</h2>
+    <div id="event-list"></div>
+  </div>
+</section>
+
+<!-- ===== プレビュー ===== -->
+<dialog id="preview-dialog">
+  <h3 id="preview-title"></h3>
+  <div class="preview-text" id="preview-text"></div>
+  <div class="dialog-actions">
+    <button onclick="document.getElementById('preview-dialog').close()">閉じる</button>
+    <button class="copy" id="preview-copy-btn">📋 コピーして送信済みにする</button>
+  </div>
+</dialog>
+
+<div class="footer-tools">
+  <button class="small" onclick="exportData()">⬇ バックアップ(JSON)</button>
+  <button class="small" onclick="document.getElementById('import-file').click()">⬆ 復元</button>
+  <input type="file" id="import-file" accept=".json" hidden onchange="importData(this)">
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'referralSnsApp_v1';
+const DEFAULT_CATEGORIES = ['ダンスイベント', 'エステイベント', 'ランウェイイベント'];
+const STATUSES = ['未送信', '送信済み', '反応あり', '返信済み', '参加確定', '見送り'];
+const CHANNEL_LABEL = { ig: 'Instagram', th: 'Threads' };
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+function seedTemplates() {
+  const seeds = [
+    ['ダンスイベント', 'ig', '基本の誘い文',
+`こんにちは、{名前}さん!
+突然のご連絡失礼します。
+
+{日付}に「{イベント名}」というダンスイベントを{場所}で開催します💃
+{名前}さんの投稿を拝見して、ぜひ来ていただきたくご連絡しました!
+
+観るだけでも大歓迎です。よかったら詳細お送りするので、気軽にお返事ください✨`],
+    ['ダンスイベント', 'th', '反応くれた人への返信',
+`{名前}さん、反応ありがとうございます!🙌
+
+投稿でも触れていた「{イベント名}」、{日付} {時間}から{場所}で開催します💃
+初めての方も多いので、お一人でも気軽に楽しめる雰囲気です。
+
+もしご興味あれば詳細ページお送りしますね!`],
+    ['エステイベント', 'ig', '基本の誘い文',
+`はじめまして、{名前}さん🌿
+素敵な投稿を拝見してご連絡しました。
+
+{日付}に「{イベント名}」という体験イベントを{場所}で開催します。
+普段のケアにプラスできる内容になっているので、{名前}さんにぜひ体験していただきたいです✨
+
+ご興味あれば詳細をお送りします。お気軽にどうぞ!`],
+    ['エステイベント', 'th', '反応くれた人への返信',
+`{名前}さん、コメント(いいね)ありがとうございます🌿
+
+ご紹介した「{イベント名}」は {日付} {時間}〜、{場所}で開催予定です。
+当日は体験メニューもご用意しています。
+
+枠に限りがあるので、気になっていたら早めにお声がけください😊`],
+    ['ランウェイイベント', 'ig', '基本の誘い文',
+`{名前}さん、はじめまして!
+プロフィールと投稿を拝見して、ぜひお声がけしたくご連絡しました👠
+
+{日付}に{場所}で「{イベント名}」というランウェイイベントを開催します。
+{名前}さんの雰囲気がイベントのイメージにぴったりで、観覧・出演どちらでも歓迎です!
+
+詳細お送りできますので、よければお返事ください✨`],
+    ['ランウェイイベント', 'th', '反応くれた人への返信',
+`{名前}さん、反応いただきありがとうございます👠
+
+「{イベント名}」は {日付} {時間}から{場所}で開催します。
+出演エントリーも観覧チケットもまだ受付中です!
+
+詳細リンクお送りしますので、気になる方(出演 or 観覧)を教えてください✨`],
+  ];
+  return seeds.map(([category, channel, title, body]) => ({ id: uid(), category, channel, title, body }));
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* 壊れたデータは初期化 */ }
+  return { templates: seedTemplates(), events: [], contacts: [] };
+}
+const state = load();
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+let currentTab = 'send';
+let currentChannel = 'ig';
+let currentTplCat = 'すべて';
+let currentSendFilter = 'すべて';
+let editingTplId = null;
+
+function categories() {
+  const set = new Set(DEFAULT_CATEGORIES);
+  state.templates.forEach(t => set.add(t.category));
+  state.events.forEach(e => e.category && set.add(e.category));
+  return [...set];
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  const [y, m, day] = d.split('-').map(Number);
+  const w = ['日','月','火','水','木','金','土'][new Date(y, m - 1, day).getDay()];
+  return `${m}月${day}日(${w})`;
+}
+
+function fillTemplate(body, contact, ev) {
+  return body
+    .replaceAll('{名前}', contact ? contact.name.replace(/^@/, '') : '{名前}')
+    .replaceAll('{イベント名}', ev ? ev.name : '{イベント名}')
+    .replaceAll('{日付}', ev && ev.date ? fmtDate(ev.date) : '{日付}')
+    .replaceAll('{時間}', ev && ev.time ? ev.time : '{時間}')
+    .replaceAll('{場所}', ev && ev.place ? ev.place : '{場所}');
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  }
+}
+
+/* ===== タブ ===== */
+function switchTab(tab) {
+  currentTab = tab;
+  ['send', 'tpl', 'event'].forEach(t => {
+    document.getElementById('view-' + t).hidden = t !== tab;
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+  });
+  render();
+}
+
+/* ===== テンプレート ===== */
+function setChannel(ch) {
+  currentChannel = ch;
+  render();
+}
+
+function saveTemplate() {
+  const category = document.getElementById('t-category').value.trim();
+  const title = document.getElementById('t-title').value.trim();
+  const body = document.getElementById('t-body').value.trim();
+  if (!category || !body) { toast('イベント種別と本文を入力してください'); return; }
+  if (editingTplId) {
+    const t = state.templates.find(t => t.id === editingTplId);
+    if (t) Object.assign(t, { category, title: title || '無題', body });
+    editingTplId = null;
+    toast('テンプレートを更新しました');
+  } else {
+    state.templates.push({ id: uid(), category, channel: currentChannel, title: title || '無題', body });
+    toast('テンプレートを追加しました');
+  }
+  document.getElementById('t-category').value = '';
+  document.getElementById('t-title').value = '';
+  document.getElementById('t-body').value = '';
+  save(); render();
+}
+
+function editTemplate(id) {
+  const t = state.templates.find(t => t.id === id);
+  if (!t) return;
+  editingTplId = id;
+  currentChannel = t.channel;
+  document.getElementById('t-category').value = t.category;
+  document.getElementById('t-title').value = t.title;
+  document.getElementById('t-body').value = t.body;
+  render();
+  document.getElementById('tpl-form-title').scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelEditTemplate() {
+  editingTplId = null;
+  document.getElementById('t-category').value = '';
+  document.getElementById('t-title').value = '';
+  document.getElementById('t-body').value = '';
+  render();
+}
+
+function deleteTemplate(id) {
+  if (!confirm('このテンプレートを削除しますか?')) return;
+  state.templates = state.templates.filter(t => t.id !== id);
+  if (editingTplId === id) cancelEditTemplate();
+  save(); render();
+}
+
+async function copyTemplateRaw(id) {
+  const t = state.templates.find(t => t.id === id);
+  if (!t) return;
+  if (await copyText(t.body)) toast('テンプレ本文をコピーしました');
+}
+
+/* ===== イベント ===== */
+function addEvent() {
+  const name = document.getElementById('e-name').value.trim();
+  const category = document.getElementById('e-category').value.trim();
+  if (!name) { toast('イベント名を入力してください'); return; }
+  state.events.push({
+    id: uid(), name, category: category || 'その他',
+    date: document.getElementById('e-date').value,
+    time: document.getElementById('e-time').value,
+    place: document.getElementById('e-place').value.trim(),
+  });
+  ['e-name', 'e-category', 'e-date', 'e-time', 'e-place'].forEach(i => document.getElementById(i).value = '');
+  save(); render();
+  toast('イベントを追加しました');
+}
+
+function deleteEvent(id) {
+  const used = state.contacts.some(c => c.eventId === id);
+  if (!confirm(used ? 'このイベントは送信リストで使われています。削除しますか?' : 'このイベントを削除しますか?')) return;
+  state.events = state.events.filter(e => e.id !== id);
+  save(); render();
+}
+
+/* ===== 送信リスト ===== */
+function addContact() {
+  const name = document.getElementById('c-name').value.trim();
+  const channel = document.getElementById('c-channel').value;
+  const eventId = document.getElementById('c-event').value;
+  if (!name) { toast('相手の名前を入力してください'); return; }
+  if (!eventId) { toast('先に「イベント」タブでイベントを追加してください'); return; }
+  state.contacts.unshift({
+    id: uid(), name, channel, eventId,
+    memo: document.getElementById('c-memo').value.trim(),
+    status: '未送信', createdAt: new Date().toISOString(),
+  });
+  document.getElementById('c-name').value = '';
+  document.getElementById('c-memo').value = '';
+  save(); render();
+  toast('リストに追加しました');
+}
+
+function setStatus(id, status) {
+  const c = state.contacts.find(c => c.id === id);
+  if (!c) return;
+  c.status = status;
+  if (status === '送信済み' && !c.sentAt) c.sentAt = new Date().toISOString();
+  save(); render();
+}
+
+function deleteContact(id) {
+  if (!confirm('この相手をリストから削除しますか?')) return;
+  state.contacts = state.contacts.filter(c => c.id !== id);
+  save(); render();
+}
+
+function templatesFor(contact) {
+  const ev = state.events.find(e => e.id === contact.eventId);
+  return state.templates.filter(t =>
+    t.channel === contact.channel && (!ev || t.category === ev.category));
+}
+
+function openPreview(contactId) {
+  const c = state.contacts.find(c => c.id === contactId);
+  if (!c) return;
+  const ev = state.events.find(e => e.id === c.eventId);
+  let tpls = templatesFor(c);
+  if (!tpls.length) tpls = state.templates.filter(t => t.channel === c.channel);
+  const sel = document.getElementById('preview-tpl-' + contactId);
+  const tpl = tpls.find(t => t.id === (sel ? sel.value : '')) || tpls[0];
+  if (!tpl) { toast('この送り方のテンプレートがありません。「文面テンプレ」タブで追加してください'); return; }
+
+  const text = fillTemplate(tpl.body, c, ev);
+  document.getElementById('preview-title').textContent =
+    `${c.name} さんへ(${CHANNEL_LABEL[c.channel]} / ${tpl.title})`;
+  document.getElementById('preview-text').textContent = text;
+  document.getElementById('preview-copy-btn').onclick = async () => {
+    if (await copyText(text)) {
+      if (c.status === '未送信') setStatus(c.id, '送信済み');
+      toast('コピーしました!SNSに貼り付けて送信してください');
+      document.getElementById('preview-dialog').close();
+    }
+  };
+  document.getElementById('preview-dialog').showModal();
+}
+
+/* ===== バックアップ ===== */
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `referral-sns-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importData(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data.templates || !data.contacts || !data.events) throw new Error('bad format');
+      if (!confirm('現在のデータをバックアップの内容で置き換えますか?')) return;
+      Object.assign(state, data);
+      save(); render();
+      toast('復元しました');
+    } catch (e) {
+      toast('読み込めないファイルです');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+/* ===== 描画 ===== */
+function render() {
+  renderCatDatalist();
+  if (currentTab === 'tpl') renderTemplates();
+  if (currentTab === 'event') renderEvents();
+  if (currentTab === 'send') renderSend();
+}
+
+function renderCatDatalist() {
+  document.getElementById('cat-list').innerHTML =
+    categories().map(c => `<option value="${esc(c)}">`).join('');
+}
+
+function renderTemplates() {
+  document.getElementById('ch-ig').className = currentChannel === 'ig' ? 'ig-active' : '';
+  document.getElementById('ch-th').className = currentChannel === 'th' ? 'th-active' : '';
+  document.getElementById('tpl-form-title').textContent = editingTplId ? '✏️ テンプレートを編集' : '➕ テンプレートを追加';
+  document.getElementById('tpl-save-btn').textContent = editingTplId ? '更新する' : '保存';
+  document.getElementById('tpl-cancel-btn').style.display = editingTplId ? 'block' : 'none';
+
+  const cats = ['すべて', ...categories()];
+  if (!cats.includes(currentTplCat)) currentTplCat = 'すべて';
+  document.getElementById('tpl-cat-chips').innerHTML = cats.map(c =>
+    `<button class="chip ${c === currentTplCat ? 'active' : ''}" onclick="currentTplCat='${esc(c)}';render()">${esc(c)}</button>`
+  ).join('');
+
+  const list = state.templates.filter(t =>
+    t.channel === currentChannel && (currentTplCat === 'すべて' || t.category === currentTplCat));
+
+  document.getElementById('tpl-list').innerHTML = list.length ? list.map(t => `
+    <div class="item">
+      <div class="item-head">
+        <span class="badge ${t.channel}">${CHANNEL_LABEL[t.channel]}</span>
+        <span class="badge cat">${esc(t.category)}</span>
+        <span class="item-title">${esc(t.title)}</span>
+      </div>
+      <div class="item-body">${esc(t.body)}</div>
+      <div class="item-actions">
+        <button class="small accent" onclick="copyTemplateRaw('${t.id}')">📋 そのままコピー</button>
+        <button class="small" onclick="editTemplate('${t.id}')">✏️ 編集</button>
+        <button class="small danger" onclick="deleteTemplate('${t.id}')">削除</button>
+      </div>
+    </div>`).join('')
+    : `<p class="empty">この条件のテンプレートはまだありません</p>`;
+}
+
+function renderEvents() {
+  const list = [...state.events].sort((a, b) => (a.date || '9999') < (b.date || '9999') ? -1 : 1);
+  document.getElementById('event-list').innerHTML = list.length ? list.map(e => {
+    const count = state.contacts.filter(c => c.eventId === e.id).length;
+    const fixed = state.contacts.filter(c => c.eventId === e.id && c.status === '参加確定').length;
+    return `
+    <div class="item">
+      <div class="item-head">
+        <span class="badge cat">${esc(e.category)}</span>
+        <span class="item-title">${esc(e.name)}</span>
+        <button class="small danger" onclick="deleteEvent('${e.id}')">削除</button>
+      </div>
+      <div class="meta">
+        ${e.date ? '🗓 ' + fmtDate(e.date) : ''} ${e.time ? e.time + '〜' : ''} ${e.place ? ' / 📍 ' + esc(e.place) : ''}
+        ${count ? ` / 声かけ ${count}人(参加確定 ${fixed}人)` : ''}
+      </div>
+    </div>`;
+  }).join('') : `<p class="empty">イベントを追加すると、声かけリストで選べるようになります</p>`;
+}
+
+function renderSend() {
+  // イベントセレクト
+  const evSel = document.getElementById('c-event');
+  const prev = evSel.value;
+  evSel.innerHTML = state.events.length
+    ? state.events.map(e => `<option value="${e.id}">${esc(e.name)}(${esc(e.category)})</option>`).join('')
+    : `<option value="">— 先にイベントを追加 —</option>`;
+  if ([...evSel.options].some(o => o.value === prev)) evSel.value = prev;
+
+  // サマリー
+  const cnt = s => state.contacts.filter(c => c.status === s).length;
+  document.getElementById('send-summary').innerHTML = `
+    <div><div class="num">${cnt('未送信')}</div><div class="lbl">未送信</div></div>
+    <div><div class="num">${cnt('送信済み') + cnt('反応あり') + cnt('返信済み')}</div><div class="lbl">やり取り中</div></div>
+    <div><div class="num">${cnt('参加確定')}</div><div class="lbl">参加確定</div></div>
+    <div><div class="num">${state.contacts.length}</div><div class="lbl">合計</div></div>`;
+
+  // フィルタ
+  const filters = ['すべて', ...STATUSES];
+  document.getElementById('send-filter').innerHTML = filters.map(f =>
+    `<button class="chip ${f === currentSendFilter ? 'active' : ''}" onclick="currentSendFilter='${f}';render()">${f}</button>`
+  ).join('');
+
+  const list = state.contacts.filter(c => currentSendFilter === 'すべて' || c.status === currentSendFilter);
+  document.getElementById('contact-list').innerHTML = list.length ? list.map(c => {
+    const ev = state.events.find(e => e.id === c.eventId);
+    let tpls = templatesFor(c);
+    if (!tpls.length) tpls = state.templates.filter(t => t.channel === c.channel);
+    return `
+    <div class="item">
+      <div class="item-head">
+        <span class="badge ${c.channel}">${CHANNEL_LABEL[c.channel]}</span>
+        <span class="item-title">${esc(c.name)}</span>
+        <select class="status-select st-${c.status}" onchange="setStatus('${c.id}', this.value)">
+          ${STATUSES.map(s => `<option ${s === c.status ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="meta">
+        🎪 ${ev ? esc(ev.name) : '(イベント削除済み)'}
+        ${c.memo ? ' / 📝 ' + esc(c.memo) : ''}
+        ${c.sentAt ? ' / 送信: ' + c.sentAt.slice(5, 10).replace('-', '/') : ''}
+      </div>
+      <div class="item-actions">
+        <select id="preview-tpl-${c.id}" style="flex:1; min-width:140px; font-size:.8rem; padding:4px 6px;">
+          ${tpls.map(t => `<option value="${t.id}">${esc(t.category)} / ${esc(t.title)}</option>`).join('')}
+        </select>
+        <button class="small accent" onclick="openPreview('${c.id}')">💬 文面を作る</button>
+        <button class="small danger" onclick="deleteContact('${c.id}')">削除</button>
+      </div>
+    </div>`;
+  }).join('') : `<p class="empty">まだ誰も追加されていません。上のフォームから追加してください</p>`;
+}
+
+switchTab('send');
+</script>
+</body>
+</html>
