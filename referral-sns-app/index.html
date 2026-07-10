@@ -6,6 +6,7 @@
 <title>SNSリファラル管理</title>
 <style>
   :root {
+    color-scheme: light;
     --bg: #f6f7f9;
     --card: #ffffff;
     --text: #1a1d21;
@@ -22,6 +23,7 @@
   }
   @media (prefers-color-scheme: dark) {
     :root {
+      color-scheme: dark;
       --bg: #111418;
       --card: #1c2128;
       --text: #e6e8eb;
@@ -64,11 +66,6 @@
   input[type=text], input[type=date], input[type=time], select, textarea {
     width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
     background: var(--bg); color: var(--text); font-size: .95rem; font-family: inherit;
-  }
-  input[type=date], input[type=time] {
-    /* iOS Safariは width:100% の date/time input の中身(数字)が描画されず空白になることがあるための回避策 */
-    -webkit-min-logical-width: calc(100% - 20px);
-    min-height: 2.5em;
   }
   textarea { min-height: 110px; resize: vertical; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; }
