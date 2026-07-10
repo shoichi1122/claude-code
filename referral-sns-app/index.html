@@ -168,9 +168,10 @@
 <p class="sub">イベントごとの誘い文をInstagram送信用・Threads返信用で管理して、相手の名前を入れてワンタップでコピー</p>
 
 <div class="tabs">
-  <button id="tab-send" onclick="switchTab('send')">📤 送信リスト</button>
-  <button id="tab-tpl" onclick="switchTab('tpl')">📝 文面テンプレ</button>
+  <button id="tab-send" onclick="switchTab('send')">📤 送信</button>
+  <button id="tab-tpl" onclick="switchTab('tpl')">📝 テンプレ</button>
   <button id="tab-event" onclick="switchTab('event')">🎪 イベント</button>
+  <button id="tab-connect" onclick="switchTab('connect')">🔗 連携</button>
 </div>
 
 <!-- ===== 送信リスト ===== -->
@@ -282,6 +283,39 @@
   </div>
 </section>
 
+<!-- ===== 連携 ===== -->
+<section id="view-connect" hidden>
+  <div class="card">
+    <h2>🧵 Threads連携(反応が来た人を自動取り込み)</h2>
+    <p class="hint" style="margin-bottom:12px">
+      あなたのThreads投稿に返信してくれた人を、送信リストへまとめて取り込みます。
+      利用には、無料の中継サーバー(Cloudflare Worker)を一度だけ用意する必要があります。
+      設定手順は <code>threads-connector/README.md</code> を参照してください。
+    </p>
+
+    <label>中継サーバー(Worker)のURL</label>
+    <input type="text" id="cn-worker-url" placeholder="例: https://threads-connector.あなた.workers.dev">
+    <p class="hint">空欄のまま「取り込み」を押すと、動作確認用のサンプルデータで試せます。</p>
+
+    <div class="item-actions" style="margin-top:12px">
+      <button class="small accent" onclick="saveWorkerUrl()">URLを保存</button>
+      <button class="small" id="cn-connect-btn" onclick="connectThreads()">Threadsと連携する</button>
+      <button class="small" id="cn-refresh-btn" onclick="refreshThreadsToken()" hidden>トークンを更新</button>
+      <button class="small danger" id="cn-disconnect-btn" onclick="disconnectThreads()" hidden>連携を解除</button>
+    </div>
+    <p class="meta" id="cn-status" style="margin-top:10px"></p>
+  </div>
+
+  <div class="card">
+    <h2>⬇ 反応が来た人を取り込む</h2>
+    <label>取り込んだ相手に紐づけるイベント(任意)</label>
+    <select id="cn-event"></select>
+    <p class="hint">取り込んだ人は「Threads / 反応あり」の状態でリストに追加されます(同じ相手は重複しません)。あとで送信タブからテンプレを選んで返信できます。</p>
+    <button class="primary" onclick="importThreadsReplies()">反応が来た人を取り込む</button>
+    <div id="cn-import-log" class="meta" style="margin-top:10px"></div>
+  </div>
+</section>
+
 <!-- ===== プレビュー ===== -->
 <dialog id="preview-dialog">
   <h3 id="preview-title"></h3>
@@ -362,11 +396,14 @@ function seedTemplates() {
 }
 
 function load() {
+  let data;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) data = JSON.parse(raw);
   } catch (e) { /* 壊れたデータは初期化 */ }
-  return { templates: seedTemplates(), events: [], contacts: [] };
+  if (!data) data = { templates: seedTemplates(), events: [], contacts: [] };
+  if (!data.settings) data.settings = {}; // 連携設定(既存データにも後付けで足す)
+  return data;
 }
 const state = load();
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -428,7 +465,7 @@ async function copyText(text) {
 /* ===== タブ ===== */
 function switchTab(tab) {
   currentTab = tab;
-  ['send', 'tpl', 'event'].forEach(t => {
+  ['send', 'tpl', 'event', 'connect'].forEach(t => {
     document.getElementById('view-' + t).hidden = t !== tab;
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
   });
@@ -632,6 +669,7 @@ function render() {
   if (currentTab === 'tpl') renderTemplates();
   if (currentTab === 'event') renderEvents();
   if (currentTab === 'send') renderSend();
+  if (currentTab === 'connect') renderConnect();
 }
 
 function renderCatDatalist() {
@@ -745,7 +783,141 @@ function renderSend() {
   }).join('') : `<p class="empty">まだ誰も追加されていません。上のフォームから追加してください</p>`;
 }
 
-switchTab('send');
+/* ===== Threads連携 ===== */
+const MOCK_REPLIES = [
+  { username: 'dance_mika', text: 'これめっちゃ気になります!詳細知りたいです✨', timestamp: '2026-07-09T12:00:00Z', permalink: 'https://www.threads.net/@dance_mika/post/xxx' },
+  { username: 'yuka.beauty', text: '参加してみたいです〜!', timestamp: '2026-07-09T10:30:00Z', permalink: 'https://www.threads.net/@yuka.beauty/post/yyy' },
+  { username: 'runway_ken', text: '出演エントリーってまだ間に合いますか?', timestamp: '2026-07-08T22:10:00Z', permalink: 'https://www.threads.net/@runway_ken/post/zzz' },
+];
+
+function renderConnect() {
+  const s = state.settings;
+  document.getElementById('cn-worker-url').value = s.workerUrl || '';
+
+  const connected = !!s.threadsToken;
+  const statusEl = document.getElementById('cn-status');
+  if (connected) {
+    const exp = s.threadsExpiry ? new Date(s.threadsExpiry) : null;
+    const days = exp ? Math.round((exp - Date.now()) / 86400000) : null;
+    statusEl.innerHTML = `✅ 連携済み（ユーザーID: ${esc(s.threadsUserId || '不明')}）` +
+      (days !== null ? ` / トークン有効期限まで約${days}日` : '');
+  } else if (s.workerUrl) {
+    statusEl.textContent = '未連携です。「Threadsと連携する」を押してThreadsにログインしてください。';
+  } else {
+    statusEl.textContent = 'URL未設定です（サンプルデータでの取り込みは今すぐ試せます）。';
+  }
+  document.getElementById('cn-connect-btn').hidden = connected;
+  document.getElementById('cn-refresh-btn').hidden = !connected;
+  document.getElementById('cn-disconnect-btn').hidden = !connected;
+
+  // イベント選択(任意)
+  const sel = document.getElementById('cn-event');
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">— 紐づけない —</option>` +
+    state.events.map(e => `<option value="${e.id}">${esc(e.name)}(${esc(e.category)})</option>`).join('');
+  if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+
+function saveWorkerUrl() {
+  state.settings.workerUrl = document.getElementById('cn-worker-url').value.trim().replace(/\/$/, '');
+  save(); renderConnect();
+  toast('保存しました');
+}
+
+function connectThreads() {
+  const url = document.getElementById('cn-worker-url').value.trim().replace(/\/$/, '');
+  if (!url) { toast('先に中継サーバーのURLを入力・保存してください'); return; }
+  state.settings.workerUrl = url; save();
+  // Worker がThreadsログイン後、#threads_token=... を付けてこのページへ戻してくる
+  const back = location.origin + location.pathname;
+  location.href = `${url}/auth/start?redirect=${encodeURIComponent(back)}`;
+}
+
+function disconnectThreads() {
+  if (!confirm('Threads連携を解除しますか?(保存済みのトークンを削除します)')) return;
+  delete state.settings.threadsToken;
+  delete state.settings.threadsUserId;
+  delete state.settings.threadsExpiry;
+  save(); renderConnect();
+  toast('連携を解除しました');
+}
+
+async function refreshThreadsToken() {
+  const s = state.settings;
+  if (!s.workerUrl || !s.threadsToken) return;
+  try {
+    const res = await fetch(`${s.workerUrl}/refresh?access_token=${encodeURIComponent(s.threadsToken)}`);
+    if (!res.ok) throw new Error('refresh failed');
+    const data = await res.json();
+    s.threadsToken = data.access_token;
+    if (data.expires_in) s.threadsExpiry = Date.now() + data.expires_in * 1000;
+    save(); renderConnect();
+    toast('トークンを更新しました');
+  } catch (e) {
+    toast('更新に失敗しました。再度連携してください');
+  }
+}
+
+async function importThreadsReplies() {
+  const s = state.settings;
+  const logEl = document.getElementById('cn-import-log');
+  logEl.textContent = '取り込み中…';
+  let replies;
+  try {
+    if (!s.workerUrl) {
+      replies = MOCK_REPLIES; // URL未設定ならサンプルで動作確認
+    } else {
+      if (!s.threadsToken) { logEl.textContent = 'まず「Threadsと連携する」で連携してください。'; return; }
+      const res = await fetch(`${s.workerUrl}/api/replies?access_token=${encodeURIComponent(s.threadsToken)}`);
+      if (!res.ok) throw new Error('http ' + res.status);
+      const data = await res.json();
+      replies = Array.isArray(data.replies) ? data.replies : [];
+    }
+  } catch (e) {
+    logEl.textContent = '取り込みに失敗しました(サーバーURL・連携状態・Metaアプリ設定を確認してください)。';
+    return;
+  }
+
+  const eventId = document.getElementById('cn-event').value;
+  const existing = new Set(state.contacts.filter(c => c.channel === 'th').map(c => c.name.toLowerCase()));
+  let added = 0, skipped = 0;
+  replies.forEach(r => {
+    const name = '@' + String(r.username || '').replace(/^@/, '');
+    if (name === '@') return;
+    if (existing.has(name.toLowerCase())) { skipped++; return; }
+    existing.add(name.toLowerCase());
+    state.contacts.unshift({
+      id: uid(), name, channel: 'th', eventId,
+      memo: r.text ? '反応: ' + String(r.text).slice(0, 40) : '',
+      status: '反応あり', createdAt: new Date().toISOString(),
+    });
+    added++;
+  });
+  save(); render();
+  logEl.textContent = `取り込み完了: 新規 ${added}人 / 既存でスキップ ${skipped}人` +
+    (s.workerUrl ? '' : '(サンプルデータ)');
+  toast(`${added}人を取り込みました`);
+}
+
+// Worker からのリダイレクトで戻ってきたらトークンを保存
+function captureThreadsToken() {
+  if (!location.hash.includes('threads_token')) return;
+  const p = new URLSearchParams(location.hash.slice(1));
+  const token = p.get('threads_token');
+  if (token) {
+    state.settings.threadsToken = token;
+    state.settings.threadsUserId = p.get('threads_user_id') || '';
+    const exp = parseInt(p.get('threads_expires') || '0', 10);
+    if (exp) state.settings.threadsExpiry = Date.now() + exp * 1000;
+    save();
+    history.replaceState(null, '', location.origin + location.pathname);
+    currentTab = 'connect';
+    toast('Threadsと連携しました');
+  }
+}
+
+captureThreadsToken();
+switchTab(currentTab);
 </script>
 </body>
 </html>

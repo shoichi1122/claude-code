@@ -1,0 +1,18 @@
+# Threads Connector — Cloudflare Worker 設定
+#
+# デプロイ手順は同ディレクトリの README.md を参照してください。
+
+name = "threads-connector"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# 公開情報。MetaのアプリダッシュボードにあるThreads App ID に置き換えてください。
+[vars]
+THREADS_APP_ID = "PUT_YOUR_THREADS_APP_ID_HERE"
+# 許可するフロントのオリジン。GitHub Pages を使うなら自分のPagesオリジンを推奨。
+# 未設定(このまま "*")でも動きますが、絞る場合は例:
+# ALLOWED_ORIGIN = "https://shoichi1122.github.io"
+ALLOWED_ORIGIN = "*"
+
+# THREADS_APP_SECRET は vars に書かず、必ず secret として設定してください:
+#   wrangler secret put THREADS_APP_SECRET
