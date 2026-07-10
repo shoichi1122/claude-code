@@ -147,6 +147,11 @@
   .dialog-actions { display: flex; gap: 8px; }
   .dialog-actions button { flex: 1; padding: 10px; border-radius: 10px; font-size: .92rem; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text); }
   .dialog-actions button.copy { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .threads-open {
+    width: 100%; margin-top: 10px; padding: 11px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--th); background: var(--th); color: var(--bg);
+    font-size: .92rem; font-weight: 600;
+  }
 
   .footer-tools { display: flex; gap: 8px; justify-content: center; margin-top: 20px; }
   .toast {
@@ -285,6 +290,8 @@
     <button onclick="document.getElementById('preview-dialog').close()">閉じる</button>
     <button class="copy" id="preview-copy-btn">📋 コピーして送信済みにする</button>
   </div>
+  <button class="threads-open" id="preview-threads-btn" hidden>🧵 Threadsの投稿画面を開いて送る</button>
+  <p class="hint" id="preview-threads-hint" hidden>Threadsの投稿画面が本文入りで開きます。返信したい投稿の下で貼り付けるか、そのまま投稿してください。</p>
 </dialog>
 
 <div class="footer-tools">
@@ -569,6 +576,23 @@ function openPreview(contactId) {
       document.getElementById('preview-dialog').close();
     }
   };
+
+  // Threadsのときだけ、本文入りの投稿画面をワンタップで開くボタンを出す
+  const thBtn = document.getElementById('preview-threads-btn');
+  const thHint = document.getElementById('preview-threads-hint');
+  const isThreads = c.channel === 'th';
+  thBtn.hidden = !isThreads;
+  thHint.hidden = !isThreads;
+  if (isThreads) {
+    thBtn.onclick = async () => {
+      await copyText(text); // アプリが本文を無視した場合の保険としてクリップボードにも入れておく
+      window.open('https://www.threads.net/intent/post?text=' + encodeURIComponent(text), '_blank', 'noopener');
+      if (c.status === '未送信') setStatus(c.id, '送信済み');
+      toast('Threadsを開きました(本文もコピー済み)');
+      document.getElementById('preview-dialog').close();
+    };
+  }
+
   document.getElementById('preview-dialog').showModal();
 }
 
