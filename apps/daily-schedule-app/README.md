@@ -11,7 +11,7 @@
 **Googleカレンダー連携を使う場合は、ローカルサーバー経由で開いてください**(Googleの認証が `file://` では動作しないため):
 
 ```bash
-cd daily-schedule-app
+cd apps/daily-schedule-app
 python3 -m http.server 8000
 # → ブラウザで http://localhost:8000 を開く
 ```
