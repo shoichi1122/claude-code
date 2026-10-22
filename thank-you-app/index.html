@@ -192,7 +192,7 @@
     <label>相手の名前(1行に1人。まとめて貼り付けOK)</label>
     <textarea id="c-names" style="min-height:80px" placeholder="例:&#10;@dance_mika&#10;KENJI&#10;さきさん"></textarea>
     <p class="hint">Instagramの場合は <code>@アカウント名</code> で入れると、DM画面をワンタップで開けます(文中では@を外した名前になります)。</p>
-    <label>ひとこと(任意・全員共通。あとで1人ずつ変えられます)</label>
+    <label>感想・ひとこと(任意・全員共通。あとで1人ずつ書けます)</label>
     <input type="text" id="c-note" placeholder="例: ラストのソロ、会場中が鳥肌でした">
     <button class="primary" onclick="addContacts()">リストに追加</button>
   </div>
@@ -272,8 +272,8 @@
   <h3 id="preview-title"></h3>
   <label>テンプレ</label>
   <select id="preview-tpl" style="margin-bottom:8px"></select>
-  <label>ひとこと(この人だけ)</label>
-  <input type="text" id="preview-note" placeholder="例: 初出演とは思えない堂々としたステージでした" style="margin-bottom:8px">
+  <label>感想・ひとこと(この人だけ。何行でもOK)</label>
+  <textarea id="preview-note" style="min-height:120px; margin-bottom:8px" placeholder="例: 根本はヒューマンスキルが重要ということがわかりました！&#10;これからは基礎的なところを当たり前にして、自分の得意を伸ばしていこうと思います！"></textarea>
   <label>文面(送る前に直接編集もできます)</label>
   <textarea class="preview-text" id="preview-text"></textarea>
   <div class="dialog-actions">
@@ -426,8 +426,22 @@ BREAK THE NORMSは「ダンサーファースト」をモットーにしてい�
 
 {差出人}`],
   ];
-  return seeds.map(([type, channel, title, body]) => ({ id: uid(), type, channel, title, body }));
+  return [...speakerSessionTemplates(), ...seeds.map(([type, channel, title, body]) => ({ id: uid(), type, channel, title, body }))];
 }
+
+// 勉強会・セミナーのスピーカーへ、当日の学びとこれからの行動を伝える形(実際に送った文面の流れに合わせたもの)
+function speakerSessionTemplates() {
+  const body =
+`{名前}さん、本日はスピーカーありがとうございました！
+
+{ひとこと}
+
+本日はありがとうございました！
+今後ともよろしくお願いいたします！`;
+  return ['line', 'ig'].map(channel => ({ id: uid(), type: 'スピーカー', channel, title: '本日のお礼(学び・これから)', body }));
+}
+
+const SEED_VERSION = 2;
 
 function load() {
   let data;
@@ -435,8 +449,11 @@ function load() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) data = JSON.parse(raw);
   } catch (e) { /* 壊れたデータは初期化 */ }
-  if (!data) data = { templates: seedTemplates(), events: [], contacts: [], settings: {} };
+  if (!data) data = { templates: seedTemplates(), events: [], contacts: [], settings: { seedVersion: SEED_VERSION } };
   if (!data.settings) data.settings = {};
+  // 以前から使っている人にも、あとから追加したサンプル文面を足す
+  if ((data.settings.seedVersion || 1) < 2) data.templates.unshift(...speakerSessionTemplates());
+  data.settings.seedVersion = SEED_VERSION;
   return data;
 }
 
