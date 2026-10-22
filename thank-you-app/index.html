@@ -62,7 +62,7 @@
   .card h2 { font-size: 1rem; margin-bottom: 10px; }
 
   label { display: block; font-size: .8rem; color: var(--text-sub); margin: 8px 0 2px; }
-  input[type=text], input[type=date], select, textarea {
+  input[type=text], input[type=password], input[type=date], select, textarea {
     width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
     background: var(--bg); color: var(--text); font-size: .95rem; font-family: inherit;
   }
@@ -145,6 +145,13 @@
   }
   .open-app.ig { background: var(--ig); }
   .open-app.line { background: var(--line); }
+
+  .ai-box {
+    border: 1px dashed var(--accent); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px;
+  }
+  .ai-box summary { cursor: pointer; font-size: .88rem; font-weight: 600; color: var(--accent); }
+  .ai-box input[type=file] { font-size: .8rem; margin-top: 2px; max-width: 100%; }
+  .ai-box button.small { margin-top: 8px; width: 100%; padding: 8px; }
 
   .footer-tools { display: flex; gap: 8px; justify-content: center; margin-top: 20px; }
   .toast {
@@ -242,6 +249,16 @@
     <label>{差出人} に入る名前</label>
     <input type="text" id="s-sender" placeholder="例: BREAK THE NORMS 主催 SHOICHI" onchange="saveSender()">
   </div>
+
+  <div class="card">
+    <h2>🤖 AI下書きの設定</h2>
+    <label>Claude APIキー</label>
+    <input type="password" id="s-apikey" placeholder="sk-ant-..." autocomplete="off" onchange="saveApiKey()">
+    <p class="hint">キーは <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Claude Console</a> で発行できます(利用分のクレジットが必要です)。キーはこの端末のブラウザにだけ保存され、バックアップ(JSON)には含まれません。共用の端末では入れないでください。</p>
+    <label>お手本の文章(過去に自分で書いたお礼文。AIが書き方を真似します)</label>
+    <textarea id="s-samples" placeholder="過去に送ったお礼文を貼り付けてください(複数OK)" onchange="saveSamples()"></textarea>
+    <p class="hint">ここに貼った文章に加えて、このアプリで送信済みにした同じ種類の相手の感想も、最近のものから自動でお手本にします。</p>
+  </div>
 </section>
 
 <!-- ===== イベント ===== -->
@@ -274,6 +291,15 @@
   <select id="preview-tpl" style="margin-bottom:8px"></select>
   <label>感想・ひとこと(この人だけ。何行でもOK)</label>
   <textarea id="preview-note" style="min-height:120px; margin-bottom:8px" placeholder="例: 根本はヒューマンスキルが重要ということがわかりました！&#10;これからは基礎的なところを当たり前にして、自分の得意を伸ばしていこうと思います！"></textarea>
+  <details class="ai-box" id="ai-box">
+    <summary>🤖 ノートからAIで感想の下書きを作る</summary>
+    <label>ノート(PDF・画像。複数OK)</label>
+    <input type="file" id="ai-files" accept="application/pdf,image/png,image/jpeg,image/webp,image/gif" multiple>
+    <label>自分のメモ(任意。感じたこと・これからやりたいこと)</label>
+    <textarea id="ai-memo" style="min-height:60px" placeholder="例: 今年のマイルストーンは全部達成できた。新しい事業でもそこは欠かさず続けたい"></textarea>
+    <button class="small accent" id="ai-run-btn">✨ 下書きを作る</button>
+    <p class="hint" id="ai-status"></p>
+  </details>
   <label>文面(送る前に直接編集もできます)</label>
   <textarea class="preview-text" id="preview-text"></textarea>
   <div class="dialog-actions">
@@ -601,6 +627,121 @@ function saveSender() {
   toast('差出人を保存しました');
 }
 
+/* ===== AI下書き ===== */
+// APIキーはバックアップに混ざらないよう、アプリのデータとは別に保存する
+const API_KEY_STORAGE = 'thankYouApp_apiKey';
+const SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.131.0/+esm';
+const AI_FILE_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+
+function getApiKey() {
+  try { return localStorage.getItem(API_KEY_STORAGE) || ''; } catch (e) { return ''; }
+}
+
+function saveApiKey() {
+  const key = document.getElementById('s-apikey').value.trim();
+  try {
+    if (key) localStorage.setItem(API_KEY_STORAGE, key); else localStorage.removeItem(API_KEY_STORAGE);
+  } catch (e) { /* 保存できない環境 */ }
+  toast(key ? 'APIキーを保存しました' : 'APIキーを削除しました');
+}
+
+function saveSamples() {
+  state.settings.styleSamples = document.getElementById('s-samples').value.trim();
+  save();
+  toast('お手本を保存しました');
+}
+
+function readAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1]);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+// お手本 = 設定に貼った文章 + 送信済みにした同じ種類の相手の感想(新しい順に5件)
+function styleExamples(type) {
+  const sentNotes = state.contacts
+    .filter(c => c.type === type && c.sentAt && c.note && c.note.length > 30)
+    .sort((a, b) => (a.sentAt < b.sentAt ? 1 : -1))
+    .slice(0, 5)
+    .map(c => c.note);
+  return [state.settings.styleSamples, ...sentNotes].filter(Boolean);
+}
+
+const AI_SYSTEM = `あなたは、イベントや勉強会の主催者・参加者が送るお礼メッセージの「感想」部分を下書きする手伝いをします。
+
+ユーザーが話を聞いて取ったノート(手書きのPDFや写真のこともあります)と、任意のメモをもとに、相手に送るお礼文の真ん中の部分だけを書いてください。宛名(「〇〇さん、本日は〜ありがとうございました！」)と締めの挨拶(「本日はありがとうございました！今後ともよろしくお願いいたします！」)はアプリが自動で付けるので、絶対に書かないでください。
+
+書く内容:
+- 話から学んだこと・気づいたこと(ノートの中から、本人に響いていそうな具体的なポイントを1〜3個)
+- それを受けて、自分がこれから具体的にやっていくこと
+- ユーザーのメモがあれば、それを最優先で反映する
+
+書き方:
+- 送り主本人の一人称で、相手に語りかける自然な話し言葉の敬語(です・ます)。
+- お手本の文章があれば、その長さ・言い回し・「！」の使い方・段落の分け方を真似する。
+- 2〜4段落、全体で200〜400文字程度。段落の間は空行を1つ入れる。
+- ノートに書かれていない事実やエピソードを作らない。読み取れない文字は無理に推測せず、使わない。
+- 金額・借金など、ノート上の個人的でデリケートな情報は、ユーザーのメモで触れていない限り書かない。
+- 前置きや説明は付けず、下書きの本文だけを出力する。`;
+
+async function generateDraft(contact, ev) {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('「テンプレ」タブの「AI下書きの設定」でAPIキーを入れてください');
+  const files = [...document.getElementById('ai-files').files];
+  const memo = document.getElementById('ai-memo').value.trim();
+  if (!files.length && !memo) throw new Error('ノートのファイルか、自分のメモを入れてください');
+  const bad = files.find(f => !AI_FILE_TYPES.includes(f.type));
+  if (bad) throw new Error(`${bad.name} は読み込めない形式です(PDF・PNG・JPEG・WebP・GIFに対応)`);
+
+  const content = [];
+  for (const f of files) {
+    const data = await readAsBase64(f);
+    content.push(f.type === 'application/pdf'
+      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } }
+      : { type: 'image', source: { type: 'base64', media_type: f.type, data } });
+  }
+  const examples = styleExamples(contact.type);
+  content.push({ type: 'text', text: [
+    `送る相手: ${displayName(contact.name)}さん(${contact.type})`,
+    ev ? `イベント: ${ev.name}` : '',
+    files.length ? '添付したのは、この人の話を聞いて取ったノートです。' : '',
+    memo ? `自分のメモ:\n${memo}` : '',
+    examples.length
+      ? `お手本(自分が過去に書いたお礼文。書き方を真似してください):\n${examples.map(e => `<example>\n${e}\n</example>`).join('\n')}`
+      : '',
+    'この人へのお礼文の感想部分を下書きしてください。',
+  ].filter(Boolean).join('\n\n') });
+
+  const { default: Anthropic } = await import(SDK_URL);
+  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+  let response;
+  try {
+    response = await client.beta.messages.create({
+      model: 'claude-opus-5-5',
+      max_tokens: 16000,
+      output_config: { effort: 'medium' },
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      system: AI_SYSTEM,
+      messages: [{ role: 'user', content }],
+    });
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError) throw new Error('APIキーが正しくありません。設定を確認してください');
+    if (e instanceof Anthropic.PermissionDeniedError) throw new Error('このAPIキーでは利用できません(権限・クレジットを確認してください)');
+    if (e instanceof Anthropic.RateLimitError) throw new Error('混み合っています。少し待ってからもう一度お試しください');
+    if (e instanceof Anthropic.APIConnectionError) throw new Error('通信できませんでした。ネット接続を確認してください');
+    if (e instanceof Anthropic.APIError) throw new Error(`AIの呼び出しに失敗しました(${e.status ?? ''} ${e.message})`);
+    throw e;
+  }
+  if (response.stop_reason === 'refusal') throw new Error('この内容では下書きを作れませんでした。メモを書き換えてお試しください');
+  const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
+  if (!text) throw new Error('下書きが空でした。もう一度お試しください');
+  return text;
+}
+
 /* ===== イベント ===== */
 function addEvent() {
   const name = document.getElementById('e-name').value.trim();
@@ -681,6 +822,28 @@ function openPreview(contactId) {
   tplSel.onchange = regenerate;
   noteInput.oninput = regenerate;
   regenerate();
+
+  document.getElementById('ai-files').value = '';
+  document.getElementById('ai-memo').value = '';
+  document.getElementById('ai-status').textContent = '';
+  document.getElementById('ai-box').open = false;
+  const aiBtn = document.getElementById('ai-run-btn');
+  aiBtn.disabled = false;
+  aiBtn.onclick = async () => {
+    if (noteInput.value.trim() && !confirm('いま入っている感想を、AIの下書きで置き換えますか?')) return;
+    const status = document.getElementById('ai-status');
+    aiBtn.disabled = true;
+    status.textContent = '⏳ ノートを読んで下書きを作っています…(30秒〜1分ほどかかることがあります)';
+    try {
+      noteInput.value = await generateDraft(c, ev);
+      regenerate();
+      status.textContent = '✅ 下書きを入れました。自分の言葉に直してから送ってください。';
+    } catch (e) {
+      status.textContent = '⚠️ ' + e.message;
+    } finally {
+      aiBtn.disabled = false;
+    }
+  };
 
   // 送る前に、選んだテンプレとひとことを相手ごとに覚えておく
   const remember = () => {
@@ -779,6 +942,8 @@ function renderTemplates() {
   document.getElementById('tpl-save-btn').textContent = editingTplId ? '更新する' : '保存';
   document.getElementById('tpl-cancel-btn').style.display = editingTplId ? 'block' : 'none';
   document.getElementById('s-sender').value = state.settings.sender || '';
+  document.getElementById('s-apikey').value = getApiKey();
+  document.getElementById('s-samples').value = state.settings.styleSamples || '';
 
   const chips = ['すべて', ...types()];
   if (!chips.includes(currentTplType)) currentTplType = 'すべて';
