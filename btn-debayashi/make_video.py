@@ -5,6 +5,7 @@
   python3 make_video.py                       # イベント用（ダンサー名なし）
   python3 make_video.py --name "SHOICHI"      # ダンサー個別の出囃子
   python3 make_video.py --name "KAITO" --sub "POPPING" --out kaito.mp4
+  python3 make_video.py --name "KAITO" --bg higgsfield_clip.mp4   # AI映像を背景に敷く
 """
 import argparse, math, random, subprocess, wave, os
 import numpy as np
@@ -90,9 +91,14 @@ VIGNETTE = (1 - 0.55 * (((xx - W / 2) / (W / 2)) ** 2 + ((yy - H / 2) / (H / 2))
 HITS = [2.0, 2.5, 3.0]          # BREAK / THE / NORMS
 def since(t, t0): return t - t0
 
-def render_frame(i, layers, name, sub):
+def render_frame(i, layers, name, sub, bg=None):
     t = i / FPS
-    img = Image.new("RGBA", (W, H), BG + (255,))
+    if bg is not None:
+        # 背景映像は文字が読めるよう暗く沈め、ヒットの瞬間だけ少し明るくする
+        dim = 0.45 if 4.0 <= t < 13.0 else 0.3
+        img = Image.fromarray((bg * dim).astype(np.uint8)).convert("RGBA")
+    else:
+        img = Image.new("RGBA", (W, H), BG + (255,))
     d = ImageDraw.Draw(img)
     g = 0.0; flash = 0.0; shake = 0.0
 
@@ -226,6 +232,7 @@ def main():
     ap.add_argument("--name", default="", help="ダンサー名（入れると11〜13秒に名前が出る）")
     ap.add_argument("--sub", default="", help="名前の下に出すサブテキスト（ジャンル・チーム名など）")
     ap.add_argument("--out", default="btn_debayashi.mp4")
+    ap.add_argument("--bg", default="", help="背景に敷く映像（Higgsfieldで生成したクリップなど）。15秒に満たない場合はループ")
     a = ap.parse_args()
     layers = {
         "BREAK": text_layer("BREAK", 230, WHITE, spacing=12),
@@ -252,8 +259,19 @@ def main():
                            "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
                            "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", a.out],
                           stdin=subprocess.PIPE)
+    bgp = None
+    if a.bg:
+        bgp = subprocess.Popen(["ffmpeg", "-loglevel", "error", "-stream_loop", "-1", "-i", a.bg, "-t", str(DUR),
+                                "-vf", f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}",
+                                "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
     for i in range(int(DUR * FPS)):
-        ff.stdin.write(render_frame(i, layers, a.name, a.sub).tobytes())
+        bg = None
+        if bgp:
+            raw = bgp.stdout.read(W * H * 3)
+            if len(raw) == W * H * 3:
+                bg = np.frombuffer(raw, np.uint8).reshape(H, W, 3).astype(np.float32)
+        ff.stdin.write(render_frame(i, layers, a.name, a.sub, bg).tobytes())
+    if bgp: bgp.kill()
     ff.stdin.close(); ff.wait()
     os.remove(wav)
     print("done:", a.out)
