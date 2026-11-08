@@ -1,0 +1,1751 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#2563eb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="マイタスク">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>マイタスク</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #15181c;
+    --text-sub: #646b76;
+    --border: #e3e6ea;
+    --accent: #2563eb;
+    --accent-soft: #dbe6fe;
+    --night: #6d28d9;
+    --night-soft: #ede4ff;
+    --danger: #dc2626;
+    --danger-soft: #fde4e4;
+    --warn: #b45309;
+    --warn-soft: #fef0d7;
+    --ok: #15803d;
+    --ok-soft: #dcf5e4;
+    --shadow: 0 1px 3px rgba(0,0,0,.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #0f1216;
+      --card: #1a1f26;
+      --text: #e7e9ec;
+      --text-sub: #9aa3af;
+      --border: #2b323b;
+      --accent: #6ea2ff;
+      --accent-soft: #1c3157;
+      --night: #b69bff;
+      --night-soft: #2c2350;
+      --danger: #f87171;
+      --danger-soft: #431b1b;
+      --warn: #fbbf24;
+      --warn-soft: #3d2d0c;
+      --ok: #4ade80;
+      --ok-soft: #12321f;
+      --shadow: 0 1px 3px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", Meiryo, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.55;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+    -webkit-tap-highlight-color: transparent;
+  }
+  button { font-family: inherit; color: inherit; cursor: pointer; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 16px; }
+
+  /* ---- header ---- */
+  header {
+    position: sticky; top: 0; z-index: 10; background: var(--bg);
+    padding-top: env(safe-area-inset-top); border-bottom: 1px solid var(--border);
+  }
+  .topbar { display: flex; align-items: center; gap: 8px; padding: 10px 0 4px; }
+  .topbar h1 { font-size: 1.05rem; flex: 1; }
+  .icon-btn {
+    min-width: 40px; height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); font-size: .85rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .icon-btn.on { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); font-weight: 600; }
+  .daynav { display: flex; align-items: center; gap: 6px; padding: 4px 0 10px; }
+  .daynav .nav-arrow { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); font-size: 1rem; }
+  .daynav .day-label { flex: 1; text-align: center; }
+  .day-label .d { font-weight: 700; font-size: 1.05rem; }
+  .day-label .range { font-size: .72rem; color: var(--text-sub); }
+  .today-btn { height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--accent); background: var(--card); color: var(--accent); font-weight: 600; font-size: .85rem; }
+  .today-btn[hidden] { display: none; }
+
+  main { padding-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+  section h2 { font-size: .9rem; color: var(--text-sub); margin: 4px 2px 6px; display: flex; align-items: center; gap: 6px; }
+  section h2 .spacer { flex: 1; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+
+  /* ---- alerts ---- */
+  .alert { border-radius: 14px; padding: 12px 14px; border: 1px solid; }
+  .alert.late { background: var(--danger-soft); border-color: var(--danger); }
+  .alert.tight { background: var(--warn-soft); border-color: var(--warn); }
+  .alert.night { background: var(--night-soft); border-color: var(--night); }
+  .alert .a-title { font-weight: 700; font-size: .95rem; }
+  .alert.late .a-title { color: var(--danger); }
+  .alert.tight .a-title { color: var(--warn); }
+  .alert.night .a-title { color: var(--night); }
+  .alert .a-body { font-size: .85rem; margin-top: 2px; }
+  .alert .actions { margin-top: 10px; }
+
+  /* ---- next card ---- */
+  .next { padding: 14px; }
+  .next .label { font-size: .75rem; color: var(--text-sub); }
+  .next .count { font-size: 1.9rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.2; }
+  .next .count small { font-size: .9rem; font-weight: 600; color: var(--text-sub); }
+  .next .what { font-size: .9rem; margin-top: 2px; }
+  .next .route { font-size: .82rem; color: var(--text-sub); margin-top: 4px; }
+
+  /* ---- timeline ---- */
+  .timeline { padding: 4px 0; }
+  .ev { display: flex; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--border); }
+  .ev:first-child { border-top: none; }
+  .ev.past .ev-title, .ev.done .ev-title { color: var(--text-sub); }
+  .ev.done .ev-title { text-decoration: line-through; }
+  .ev-time { width: 58px; flex: 0 0 58px; text-align: right; }
+  .ev-time .t { font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+  .ev-time .t2 { font-size: .7rem; color: var(--text-sub); }
+  .ev.night .ev-time .t { color: var(--night); }
+  .ev-main { flex: 1; min-width: 0; }
+  .ev-title { font-weight: 700; font-size: .98rem; word-break: break-word; }
+  .badges { display: inline-flex; gap: 4px; flex-wrap: wrap; vertical-align: middle; margin-left: 4px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: .68rem; font-weight: 700; background: var(--bg); border: 1px solid var(--border); color: var(--text-sub); }
+  .badge.night { background: var(--night-soft); border-color: transparent; color: var(--night); }
+  .badge.late { background: var(--danger-soft); border-color: transparent; color: var(--danger); }
+  .badge.tight { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+  .badge.ok { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+  .ev-sub { font-size: .8rem; color: var(--text-sub); margin-top: 2px; word-break: break-word; }
+  .travel { margin-top: 6px; font-size: .82rem; background: var(--bg); border-radius: 10px; padding: 7px 10px; }
+  .travel b { font-variant-numeric: tabular-nums; }
+  .travel .why { color: var(--text-sub); font-size: .74rem; }
+  .travel.warn { color: var(--warn); }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .btn {
+    min-height: 36px; padding: 6px 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); font-size: .82rem; font-weight: 600; white-space: nowrap;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .btn.ghost-danger { color: var(--danger); }
+  .btn.on { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+  .btn.block { width: 100%; min-height: 46px; font-size: .95rem; }
+  .divider {
+    display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: .74rem; font-weight: 700;
+    color: var(--night); background: var(--night-soft); border-top: 1px solid var(--border);
+  }
+  .nowline { display: flex; align-items: center; gap: 8px; padding: 2px 14px; font-size: .72rem; color: var(--danger); font-weight: 700; }
+  .nowline::after { content: ""; flex: 1; height: 2px; background: var(--danger); border-radius: 2px; }
+  .empty { padding: 20px 14px; text-align: center; color: var(--text-sub); font-size: .88rem; }
+
+  /* ---- todos ---- */
+  .todo { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--border); }
+  .todo:first-child { border-top: none; }
+  .todo input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); flex: 0 0 auto; }
+  .todo .tx { flex: 1; word-break: break-word; }
+  .todo.done .tx { color: var(--text-sub); text-decoration: line-through; }
+  .todo .del { border: none; background: none; color: var(--text-sub); font-size: 1.1rem; width: 32px; height: 32px; }
+  .todo-add { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }
+  .todo-add input { flex: 1; min-width: 0; }
+
+  /* ---- upcoming ---- */
+  .up { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-top: 1px solid var(--border); width: 100%; text-align: left; background: none; border-left: 0; border-right: 0; border-bottom: 0; font-size: .9rem; }
+  .up:first-child { border-top: none; }
+  .up .ud { font-weight: 700; width: 92px; flex: 0 0 92px; }
+  .up .ut { flex: 1; min-width: 0; color: var(--text-sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .82rem; }
+
+  /* ---- FAB ---- */
+  .fab {
+    position: fixed; right: 18px; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 20;
+    width: 60px; height: 60px; border-radius: 50%; border: none; background: var(--accent); color: #fff;
+    font-size: 2rem; line-height: 1; box-shadow: 0 6px 16px rgba(37,99,235,.4);
+  }
+
+  /* ---- sheets ---- */
+  dialog.sheet {
+    margin: auto auto 0; width: 100%; max-width: 640px; max-height: 94vh; max-height: 94dvh;
+    border: none; border-radius: 18px 18px 0 0; padding: 0; background: var(--card); color: var(--text);
+    overflow: hidden;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  .sheet-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .sheet-head h3 { flex: 1; font-size: 1rem; }
+  .sheet-body { padding: 14px 16px calc(20px + env(safe-area-inset-bottom)); overflow-y: auto; max-height: calc(94vh - 58px); max-height: calc(94dvh - 58px); -webkit-overflow-scrolling: touch; }
+  .field { margin-bottom: 12px; }
+  .field > label, .lbl { display: block; font-size: .78rem; color: var(--text-sub); margin-bottom: 4px; font-weight: 600; }
+  input[type=text], input[type=number], input[type=date], input[type=password], input[type=email], input[type=tel], select, textarea {
+    width: 100%; min-width: 0; min-height: 44px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg); color: var(--text); font-size: 16px; font-family: inherit;
+  }
+  textarea { min-height: 200px; resize: vertical; line-height: 1.6; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row2 > .field { min-width: 0; }
+  .hint { font-size: .75rem; color: var(--text-sub); margin-top: 4px; }
+  .preview { font-size: .8rem; margin-top: 4px; font-weight: 600; }
+  .preview.night { color: var(--night); }
+  .preview.err { color: var(--danger); }
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .seg button { min-height: 42px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); font-size: .82rem; }
+  .seg button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 700; }
+  .check { display: flex; align-items: center; gap: 8px; min-height: 40px; font-size: .9rem; }
+  .check input { width: 22px; height: 22px; accent-color: var(--accent); }
+  .plan-box { background: var(--bg); border-radius: 12px; padding: 10px 12px; font-size: .85rem; margin-bottom: 12px; }
+  .plan-box b { font-variant-numeric: tabular-nums; }
+  fieldset { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px 2px; margin-bottom: 12px; }
+  legend { font-size: .8rem; font-weight: 700; padding: 0 4px; color: var(--text-sub); }
+  .sheet-actions { display: flex; gap: 8px; margin-top: 6px; }
+  .sheet-actions .btn { flex: 1; min-height: 46px; font-size: .92rem; }
+  .send-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .send-grid .btn { min-height: 46px; }
+
+  /* ---- alarm ---- */
+  dialog.alarm {
+    margin: auto; width: calc(100% - 32px); max-width: 420px; border: none; border-radius: 20px; padding: 22px 18px;
+    background: var(--card); color: var(--text); text-align: center;
+  }
+  .alarm .big { font-size: 2.6rem; }
+  .alarm h3 { font-size: 1.2rem; margin: 6px 0; }
+  .alarm p { font-size: .92rem; color: var(--text-sub); white-space: pre-line; }
+  .alarm .actions { flex-direction: column; margin-top: 16px; }
+  .alarm .actions .btn { min-height: 48px; font-size: 1rem; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: #1f2937; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: .86rem; z-index: 100;
+    max-width: calc(100% - 32px); box-shadow: 0 6px 18px rgba(0,0,0,.25); opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .toast.show { opacity: 1; }
+  .muted { color: var(--text-sub); }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="topbar">
+      <h1>🗓 マイタスク</h1>
+      <button class="icon-btn" id="standby-btn" title="画面をつけたままアラームを待機">🔔 待機</button>
+      <button class="icon-btn" id="settings-btn" aria-label="設定">⚙</button>
+    </div>
+    <div class="daynav">
+      <button class="nav-arrow" id="prev-day" aria-label="前の日">◀</button>
+      <div class="day-label">
+        <div class="d" id="day-title"></div>
+        <div class="range" id="day-range"></div>
+      </div>
+      <button class="nav-arrow" id="next-day" aria-label="次の日">▶</button>
+      <button class="today-btn" id="today-btn">今日</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="alerts" style="display:flex;flex-direction:column;gap:10px"></div>
+  <div id="next"></div>
+
+  <section>
+    <h2>予定 <span class="spacer"></span><span id="count" class="muted" style="font-weight:400"></span></h2>
+    <div class="card timeline" id="timeline"></div>
+  </section>
+
+  <section>
+    <h2>やること</h2>
+    <div class="card">
+      <div id="todos"></div>
+      <form class="todo-add" id="todo-form">
+        <input type="text" id="todo-input" placeholder="時間の決まっていないタスクを追加" enterkeyhint="done">
+        <button class="btn primary" type="submit">追加</button>
+      </form>
+    </div>
+  </section>
+
+  <section>
+    <h2>この先の予定</h2>
+    <div class="card" id="upcoming"></div>
+  </section>
+</main>
+
+<button class="fab" id="add-btn" aria-label="予定を追加">＋</button>
+
+<!-- 予定フォーム -->
+<dialog class="sheet" id="ev-sheet">
+  <form method="dialog" id="ev-form" novalidate>
+    <div class="sheet-head">
+      <h3 id="ev-sheet-title">予定を追加</h3>
+      <button type="button" class="btn" data-close>閉じる</button>
+    </div>
+    <div class="sheet-body">
+      <div class="field">
+        <label for="f-title">タイトル</label>
+        <input type="text" id="f-title" placeholder="例: 〇〇さんとMTG" required>
+      </div>
+      <div class="field">
+        <label for="f-day">日付(この日の予定として表示)</label>
+        <input type="date" id="f-day" required>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label for="f-start">開始時刻</label>
+          <input type="text" id="f-start" inputmode="numeric" placeholder="例: 2400" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="f-end">終了(任意)</label>
+          <input type="text" id="f-end" inputmode="numeric" placeholder="例: 2500" autocomplete="off">
+        </div>
+      </div>
+      <div class="preview" id="f-time-preview"></div>
+      <div class="hint" id="f-time-hint" style="margin-bottom:12px"></div>
+
+      <fieldset>
+        <legend>移動・ナビ</legend>
+        <div class="field">
+          <span class="lbl">移動手段</span>
+          <div class="seg" id="f-mode">
+            <button type="button" data-mode="none">なし<br><small>オンライン等</small></button>
+            <button type="button" data-mode="car">🚗 車</button>
+            <button type="button" data-mode="transit">🚃 電車</button>
+            <button type="button" data-mode="walk">🚶 徒歩</button>
+          </div>
+        </div>
+        <div id="travel-fields">
+          <div class="field">
+            <label for="f-location">目的地</label>
+            <input type="text" id="f-location" placeholder="住所・施設名">
+          </div>
+          <div class="field">
+            <label for="f-origin">出発地</label>
+            <input type="text" id="f-origin" placeholder="空欄 = 自宅(設定)/現在地">
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="f-travel">所要時間(分・渋滞なし)</label>
+              <input type="number" id="f-travel" inputmode="numeric" min="0" placeholder="例: 40">
+            </div>
+            <div class="field">
+              <label for="f-buffer">何分前に着く?</label>
+              <input type="number" id="f-buffer" inputmode="numeric" min="0">
+            </div>
+          </div>
+          <button type="button" class="btn block" id="f-fetch" style="margin-bottom:10px">🌐 Googleで渋滞込みの所要時間を取得</button>
+          <label class="check" id="f-highway-row"><input type="checkbox" id="f-highway"> 高速道路を使う</label>
+          <label class="check"><input type="checkbox" id="f-rain"> 雨・雪の予報(混雑を上乗せ)</label>
+        </div>
+      </fieldset>
+
+      <div class="plan-box" id="f-plan" hidden></div>
+
+      <div class="field">
+        <label for="f-remind">開始前の通知</label>
+        <select id="f-remind">
+          <option value="-1">なし</option>
+          <option value="0">開始時刻</option>
+          <option value="5">5分前</option>
+          <option value="10">10分前</option>
+          <option value="15">15分前</option>
+          <option value="30">30分前</option>
+          <option value="60">1時間前</option>
+        </select>
+      </div>
+
+      <fieldset>
+        <legend>遅刻連絡の送り先(任意)</legend>
+        <div class="row2">
+          <div class="field">
+            <label for="f-cname">相手の名前</label>
+            <input type="text" id="f-cname" placeholder="例: 田中">
+          </div>
+          <div class="field">
+            <label for="f-cto">メール or 電話</label>
+            <input type="text" id="f-cto" inputmode="email" placeholder="a@b.jp / 090…">
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <label for="f-notes">メモ</label>
+        <input type="text" id="f-notes" placeholder="持ち物・URLなど">
+      </div>
+
+      <div class="sheet-actions">
+        <button type="button" class="btn ghost-danger" id="f-delete" style="flex:0 0 auto">削除</button>
+        <button type="submit" class="btn primary">保存</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<!-- 遅刻連絡 -->
+<dialog class="sheet" id="msg-sheet">
+  <div class="sheet-head">
+    <h3>✉️ 遅刻の連絡文</h3>
+    <button type="button" class="btn" data-close>閉じる</button>
+  </div>
+  <div class="sheet-body">
+    <div class="hint" id="m-info" style="margin:0 0 10px;font-size:.82rem"></div>
+    <div class="row2">
+      <div class="field">
+        <label for="m-min">遅れる時間(分)</label>
+        <input type="number" id="m-min" inputmode="numeric" min="1">
+      </div>
+      <div class="field">
+        <label for="m-style">文体</label>
+        <select id="m-style">
+          <option value="business">ビジネス(丁寧)</option>
+          <option value="casual">カジュアル</option>
+          <option value="short">短文(SMS向け)</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="m-reason">理由</label>
+        <select id="m-reason">
+          <option value="jam">道路の渋滞</option>
+          <option value="highway">高速道路の渋滞</option>
+          <option value="train">電車の遅延</option>
+          <option value="prev">前の予定が押した</option>
+          <option value="depart">出発が遅れた</option>
+          <option value="sick">体調不良</option>
+          <option value="none">理由を書かない</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="m-name">相手の名前</label>
+        <input type="text" id="m-name" placeholder="例: 田中">
+      </div>
+    </div>
+    <div class="field">
+      <label for="m-text">送る文章(自由に編集できます)</label>
+      <textarea id="m-text"></textarea>
+    </div>
+    <button class="btn primary block" id="m-copy">📋 コピー</button>
+    <div class="send-grid">
+      <button class="btn" id="m-share">📤 共有…</button>
+      <button class="btn" id="m-line">💬 LINE</button>
+      <button class="btn" id="m-mail">✉️ メール</button>
+      <button class="btn" id="m-sms">📱 SMS</button>
+    </div>
+    <p class="hint">※ 送信は各アプリで最後に確認してから行います(勝手には送られません)。</p>
+  </div>
+</dialog>
+
+<!-- 設定 -->
+<dialog class="sheet" id="settings-sheet">
+  <div class="sheet-head">
+    <h3>⚙ 設定</h3>
+    <button type="button" class="btn" data-close>閉じる</button>
+  </div>
+  <div class="sheet-body">
+    <fieldset>
+      <legend>1日の区切り</legend>
+      <div class="field">
+        <label for="s-boundary">この時刻までの予定は「前の日の夜」として表示</label>
+        <select id="s-boundary"></select>
+        <p class="hint">例: 5:00 にすると、11/9 0:00 のMTGは「11/8 の 24:00」として表示されます。</p>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>移動・アラーム</legend>
+      <div class="row2">
+        <div class="field">
+          <label for="s-buffer">目的地に何分前に着く?</label>
+          <input type="number" id="s-buffer" inputmode="numeric" min="0">
+        </div>
+        <div class="field">
+          <label for="s-prep">準備開始(出発の何分前)</label>
+          <input type="number" id="s-prep" inputmode="numeric" min="0">
+        </div>
+      </div>
+      <div class="field">
+        <label for="s-home">自宅(出発地の初期値)</label>
+        <input type="text" id="s-home" placeholder="住所・最寄り駅など">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label for="s-mode">新しい予定の移動手段</label>
+          <select id="s-mode">
+            <option value="none">なし</option>
+            <option value="car">車</option>
+            <option value="transit">電車</option>
+            <option value="walk">徒歩</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="s-night">深夜予定の事前通知</label>
+          <select id="s-night"></select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="s-nav">ナビアプリ</label>
+        <select id="s-nav">
+          <option value="google">Google マップ</option>
+          <option value="apple">Apple マップ</option>
+        </select>
+      </div>
+      <div class="row2">
+        <button class="btn" id="s-notify">🔔 通知を許可</button>
+        <button class="btn" id="s-test">⏰ アラームを試す</button>
+      </div>
+      <p class="hint" id="s-notify-state"></p>
+    </fieldset>
+    <fieldset>
+      <legend>遅刻連絡</legend>
+      <div class="field">
+        <label for="s-name">自分の名前(連絡文に入ります)</label>
+        <input type="text" id="s-name" placeholder="例: 山田">
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>渋滞のリアルタイム予測(任意)</legend>
+      <div class="field">
+        <label for="s-apikey">Google Maps APIキー(Routes API)</label>
+        <input type="password" id="s-apikey" autocomplete="off" placeholder="未設定なら時間帯ルールで渋滞を推定">
+      </div>
+      <label class="check"><input type="checkbox" id="s-live"> 出発前後は現在地から5分ごとに到着予測を更新</label>
+      <p class="hint">キーはこの端末のブラウザにだけ保存されます。設定方法はREADMEを参照。</p>
+    </fieldset>
+    <fieldset>
+      <legend>Googleカレンダー取り込み(任意)</legend>
+      <div class="field">
+        <label for="s-client">OAuth クライアントID</label>
+        <input type="text" id="s-client" autocomplete="off" placeholder="xxxx.apps.googleusercontent.com">
+      </div>
+      <button class="btn block" id="s-gcal" style="margin-bottom:10px">🗓 今後60日分の予定を読み込む</button>
+      <p class="hint" style="margin-bottom:10px">深夜0時〜区切り時刻の予定は、自動で「前の日の夜」に振り分けます。</p>
+    </fieldset>
+    <fieldset>
+      <legend>データ</legend>
+      <div class="row2" style="margin-bottom:10px">
+        <button class="btn" id="s-export">⬇ バックアップ</button>
+        <button class="btn" id="s-import">⬆ 復元</button>
+      </div>
+      <input type="file" id="s-import-file" accept="application/json" hidden>
+    </fieldset>
+    <button class="btn primary block" id="s-save">保存</button>
+  </div>
+</dialog>
+
+<!-- アラーム -->
+<dialog class="alarm" id="alarm">
+  <div class="big" id="al-icon">⏰</div>
+  <h3 id="al-title"></h3>
+  <p id="al-body"></p>
+  <div class="actions" id="al-actions"></div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+(() => {
+  // =========================================================
+  //  保存
+  // =========================================================
+  const K = {
+    events: 'task-manager:events',
+    todos: 'task-manager:todos',
+    settings: 'task-manager:settings',
+    fired: 'task-manager:fired',
+  };
+  // 「今日の予定まとめ」アプリと同じキー(同じGitHub Pages上なら設定を共有できる)
+  const GCAL_CLIENT_KEY = 'daily-schedule:gcal-client-id';
+
+  const DEFAULTS = {
+    boundary: 300,       // 1日の区切り(分)。5:00
+    buffer: 10,          // 何分前に到着するか
+    prep: 15,            // 出発の何分前に準備開始を知らせるか
+    home: '',
+    defaultMode: 'none',
+    nightAlert: 1260,    // 深夜予定がある日の事前通知 21:00 (-1でなし)
+    nav: 'google',
+    myName: '',
+    apiKey: '',
+    live: true,
+  };
+
+  function read(key, fallback) {
+    try { const v = JSON.parse(localStorage.getItem(key)); return v == null ? fallback : v; }
+    catch { return fallback; }
+  }
+  function write(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); }
+    catch { toast('保存できませんでした(ブラウザの保存領域を確認してください)'); }
+  }
+
+  let S = Object.assign({}, DEFAULTS, read(K.settings, {}));
+  let events = read(K.events, []);
+  let todos = read(K.todos, []);
+  let fired = read(K.fired, {});
+  const saveEvents = () => write(K.events, events);
+  const saveTodos = () => write(K.todos, todos);
+  const saveFired = () => write(K.fired, fired);
+
+  // =========================================================
+  //  日付・時刻ユーティリティ
+  // =========================================================
+  const pad = n => String(n).padStart(2, '0');
+  const WD = ['日', '月', '火', '水', '木', '金', '土'];
+  const MIN = 60000;
+  const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const dateOf = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+  const addDays = (k, n) => { const d = dateOf(k); d.setDate(d.getDate() + n); return keyOf(d); };
+  // 「活動日」の d時m分(m は 24*60 を超えてもよい)の実時刻
+  const at = (dayKey, min) => { const d = dateOf(dayKey); d.setMinutes(min); return d; };
+  const clock = d => `${d.getHours()}:${pad(d.getMinutes())}`;
+  const extTime = min => `${Math.floor(min / 60)}:${pad(min % 60)}`;
+  const realTime = min => `${Math.floor(min / 60) % 24}:${pad(min % 60)}`;
+  const mdw = k => { const d = dateOf(k); return `${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})`; };
+  const ceil5 = n => Math.ceil(n / 5) * 5;
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const num = (v, fb) => { const n = Number(v); return v === '' || v == null || Number.isNaN(n) ? fb : n; };
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+  // 区切り時刻より前(深夜)は前日の「活動日」に属する
+  function activityDayOf(d) {
+    const m = d.getHours() * 60 + d.getMinutes();
+    return m < S.boundary ? addDays(keyOf(d), -1) : keyOf(d);
+  }
+  const todayKey = () => activityDayOf(new Date());
+
+  function dur(ms) {
+    const neg = ms < 0; ms = Math.abs(ms);
+    const m = Math.round(ms / MIN), h = Math.floor(m / 60);
+    const s = h ? `${h}時間${m % 60 ? (m % 60) + '分' : ''}` : `${m}分`;
+    return neg ? `${s}超過` : s;
+  }
+
+  // "2400" "24:00" "24時30分" "930" "9" → 分。区切り時刻より前は深夜(24時台〜)として扱う
+  function parseTime(str) {
+    if (str == null) return null;
+    let s = String(str).trim().replace(/[０-９：]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+      .replace(/\s/g, '').replace(/分$/, '');
+    if (!s) return null;
+    let h, m;
+    let mt = s.match(/^(\d{1,2})[:時](\d{0,2})$/);
+    if (mt) { h = +mt[1]; m = mt[2] ? +mt[2] : 0; }
+    else if (/^\d{1,2}$/.test(s)) { h = +s; m = 0; }
+    else if (/^\d{3,4}$/.test(s)) { h = +s.slice(0, -2); m = +s.slice(-2); }
+    else return { error: '時刻の形式が読み取れません' };
+    if (m >= 60 || h >= 48) return { error: '時刻の形式が読み取れません' };
+    let min = h * 60 + m, wrapped = false;
+    if (min < S.boundary) { min += 1440; wrapped = true; }
+    return { min, wrapped };
+  }
+
+  // =========================================================
+  //  祝日・渋滞推定
+  // =========================================================
+  const HOLIDAYS = new Set([
+    '2026-01-01', '2026-01-12', '2026-02-11', '2026-02-23', '2026-03-20', '2026-04-29', '2026-05-03', '2026-05-04',
+    '2026-05-05', '2026-05-06', '2026-07-20', '2026-08-11', '2026-09-21', '2026-09-22', '2026-09-23', '2026-10-12',
+    '2026-11-03', '2026-11-23',
+    '2027-01-01', '2027-01-11', '2027-02-11', '2027-02-23', '2027-03-21', '2027-03-22', '2027-04-29', '2027-05-03',
+    '2027-05-04', '2027-05-05', '2027-07-19', '2027-08-11', '2027-09-20', '2027-09-23', '2027-10-11', '2027-11-03',
+    '2027-11-23',
+  ]);
+  const isHoliday = d => d.getDay() === 0 || d.getDay() === 6 || HOLIDAYS.has(keyOf(d));
+  function bigHoliday(d) {
+    const md = (d.getMonth() + 1) * 100 + d.getDate();
+    if (md >= 429 && md <= 506) return 'GW';
+    if (md >= 810 && md <= 818) return 'お盆';
+    if (md >= 1228 || md <= 104) return '年末年始';
+    return null;
+  }
+
+  // 時間帯・曜日・連休・天気から渋滞の上乗せを推定(APIキーなしでも動く)
+  function estimateTraffic(ev, depart, base) {
+    const reasons = [];
+    let pct = 0, extra = 0;
+    const hm = depart.getHours() * 60 + depart.getMinutes();
+    const inR = (a, b) => hm >= a && hm < b;
+    if (ev.mode === 'car') {
+      const hol = isHoliday(depart);
+      if (!hol) {
+        if (inR(420, 570)) { pct += 30; reasons.push('平日朝ラッシュ +30%'); }
+        else if (inR(1020, 1170)) { pct += 30; reasons.push('平日夕方ラッシュ +30%'); }
+        if (depart.getDate() % 5 === 0 && inR(420, 720)) { pct += 10; reasons.push('五十日 +10%'); }
+      } else if (ev.highway) {
+        if (inR(420, 660)) { pct += 40; reasons.push('休日朝の高速(下り)渋滞 +40%'); }
+        else if (inR(900, 1200)) { pct += 50; reasons.push('休日夕方の高速(上り)渋滞 +50%'); }
+      } else if (inR(600, 1080)) { pct += 15; reasons.push('休日昼の一般道混雑 +15%'); }
+      const big = bigHoliday(depart);
+      if (big && ev.highway && inR(360, 1260)) { pct += 60; reasons.push(`${big}の帰省・行楽渋滞 +60%`); }
+      if (ev.rain) { pct += 15; reasons.push('雨・雪 +15%'); }
+      if (inR(1320, 1440) || inR(0, 300)) reasons.push('深夜帯: 渋滞は少なめ');
+      extra = pct ? ceil5(base * pct / 100) : 0;
+    } else if (ev.mode === 'transit') {
+      extra = 5; reasons.push('乗り換え・遅延の余裕 +5分');
+      if (ev.rain) { extra += 5; reasons.push('雨・雪 +5分'); }
+    } else if (ev.mode === 'walk' && ev.rain) {
+      extra = ceil5(base * 0.15); reasons.push('雨・雪 +15%');
+    }
+    return { extra, reasons };
+  }
+
+  // =========================================================
+  //  予定ごとの計画(出発時刻など)
+  // =========================================================
+  const hasTravelMode = ev => ev.mode && ev.mode !== 'none';
+  function planOf(ev) {
+    const p = { start: at(ev.day, ev.startMin), travel: false };
+    p.end = ev.endMin != null ? at(ev.day, ev.endMin) : null;
+    p.night = !ev.allDay && ev.startMin >= 1440;
+    if (ev.allDay || !hasTravelMode(ev)) return p;
+    const apiOk = ev.api && ev.api.sig === travelSig(ev);
+    if (!(ev.travelMin > 0) && !apiOk) { p.needsTravel = true; return p; }
+    const buffer = num(ev.buffer, S.buffer);
+    const arriveBy = new Date(p.start - buffer * MIN);
+    let base, extra, reasons, source;
+    if (apiOk) {
+      base = ev.api.static || ev.api.duration;
+      extra = Math.max(0, ev.api.duration - base);
+      reasons = [`Googleの交通予測(${new Date(ev.api.at).getMonth() + 1}/${new Date(ev.api.at).getDate()} ${clock(new Date(ev.api.at))}取得)`];
+      if (ev.rain && ev.mode === 'car') { const r = ceil5(ev.api.duration * 0.1); extra += r; reasons.push(`雨・雪 +${r}分`); }
+      source = 'api';
+    } else {
+      base = ev.travelMin;
+      const t = estimateTraffic(ev, new Date(arriveBy - base * MIN), base);
+      extra = t.extra; reasons = t.reasons; source = 'estimate';
+    }
+    const total = base + extra;
+    const departAt = new Date(arriveBy - total * MIN);
+    const prepAt = S.prep > 0 ? new Date(departAt - S.prep * MIN) : null;
+    return Object.assign(p, { travel: true, buffer, arriveBy, base, extra, total, reasons, source, departAt, prepAt });
+  }
+  // 所要時間に影響する項目が変わったら、取得済みのAPI結果は使わない
+  const travelSig = ev => [ev.day, ev.startMin, ev.mode, ev.location, ev.origin, ev.highway ? 1 : 0, num(ev.buffer, S.buffer)].join('|');
+
+  // 遅刻リスク判定
+  function riskOf(ev, p, now = new Date()) {
+    if (!p.travel || ev.done) return null;
+    if (now > p.start.getTime() + 60 * MIN) return null;
+    let eta, reason;
+    const liveOk = ev.live && now - ev.live.at < 15 * MIN;
+    if (liveOk) {
+      eta = new Date(ev.live.at + ev.live.dur * MIN);
+      reason = ev.live.dur > p.base + 5 ? (ev.highway ? 'highway' : (ev.mode === 'car' ? 'jam' : 'train')) : (ev.departed ? 'jam' : 'depart');
+    } else {
+      if (ev.departed || now < p.departAt) return null;
+      eta = new Date(now.getTime() + p.total * MIN);
+      reason = 'depart';
+    }
+    const lateMin = Math.ceil((eta - p.start) / MIN);
+    if (lateMin > 0) return { level: 'late', lateMin, eta, reason };
+    if (eta > p.arriveBy || (!ev.departed && now >= p.departAt)) return { level: 'tight', lateMin, eta, reason };
+    return null;
+  }
+
+  const isOnline = ev => !hasTravelMode(ev) || /^https?:\/\//i.test(ev.location || '') || /zoom|meet\.google|teams/i.test(ev.location || '');
+
+  // =========================================================
+  //  ナビ・カレンダーリンク
+  // =========================================================
+  const originOf = ev => (ev.origin || S.home || '').trim();
+  function navUrl(ev) {
+    const dest = encodeURIComponent(ev.location || '');
+    const origin = originOf(ev);
+    if (S.nav === 'apple') {
+      const flg = { car: 'd', transit: 'r', walk: 'w' }[ev.mode] || 'd';
+      return `https://maps.apple.com/?daddr=${dest}&dirflg=${flg}` + (ev.origin ? `&saddr=${encodeURIComponent(ev.origin)}` : '');
+    }
+    const tm = { car: 'driving', transit: 'transit', walk: 'walking' }[ev.mode] || 'driving';
+    // 出発地が空なら現在地からナビ(dir_action=navigate でそのまま案内開始)
+    let u = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=${tm}`;
+    if (ev.origin) u += `&origin=${encodeURIComponent(ev.origin)}`;
+    else if (ev.mode !== 'transit') u += '&dir_action=navigate';
+    else if (origin) u += `&origin=${encodeURIComponent(origin)}`;
+    return u;
+  }
+  // Yahoo!乗換案内: 「到着時刻指定」で 目的地にX分前に着く電車を検索
+  function transitUrl(ev, p) {
+    const from = originOf(ev);
+    if (!from || !ev.location || !p.arriveBy) return null;
+    const a = p.arriveBy;
+    const mm = pad(a.getMinutes());
+    return 'https://transit.yahoo.co.jp/search/result?' + new URLSearchParams({
+      from, to: ev.location, y: a.getFullYear(), m: pad(a.getMonth() + 1), d: pad(a.getDate()),
+      hh: a.getHours(), m1: mm[0], m2: mm[1], type: '4',
+    });
+  }
+
+  // =========================================================
+  //  .ics(端末のカレンダーにアラーム付きで登録)
+  // =========================================================
+  const icsDate = d => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const icsText = s => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  function icsFor(list) {
+    const now = icsDate(new Date());
+    const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//mytask//task-manager-app//JA', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+    const alarm = (trigger, text) => ['BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsText(text)}`, trigger, 'END:VALARM'];
+    for (const ev of list) {
+      const p = planOf(ev);
+      const desc = [`${mdw(ev.day)}の予定(${extTime(ev.startMin)})`];
+      if (p.travel) desc.push(`${clock(p.departAt)} 出発 → ${clock(p.arriveBy)} 到着(${p.buffer}分前)`, `ナビ: ${navUrl(ev)}`);
+      if (ev.notes) desc.push(ev.notes);
+      L.push('BEGIN:VEVENT', `UID:${ev.id}@task-manager`, `DTSTAMP:${now}`, `DTSTART:${icsDate(p.start)}`,
+        `DTEND:${icsDate(p.end && p.end > p.start ? p.end : new Date(p.start.getTime() + 60 * MIN))}`,
+        `SUMMARY:${icsText((p.night ? '🌙 ' : '') + ev.title)}`, `DESCRIPTION:${icsText(desc.join('\n'))}`);
+      if (ev.location) L.push(`LOCATION:${icsText(ev.location)}`);
+      const rm = num(ev.remind, 15);
+      if (rm >= 0) L.push(...alarm(`TRIGGER:-PT${rm}M`, ev.title));
+      if (p.night && S.nightAlert >= 0) {
+        const na = at(ev.day, S.nightAlert);
+        if (na < p.start) L.push(...alarm(`TRIGGER;VALUE=DATE-TIME:${icsDate(na)}`, `今夜 ${extTime(ev.startMin)} から「${ev.title}」があります`));
+      }
+      L.push('END:VEVENT');
+      if (p.travel) {
+        L.push('BEGIN:VEVENT', `UID:${ev.id}-depart@task-manager`, `DTSTAMP:${now}`, `DTSTART:${icsDate(p.departAt)}`,
+          `DTEND:${icsDate(p.arriveBy)}`, `SUMMARY:${icsText('🚗 出発: ' + ev.title)}`,
+          `DESCRIPTION:${icsText(`${clock(p.arriveBy)} 着(開始${p.buffer}分前)\n所要 ${p.total}分(渋滞の上乗せ ${p.extra}分)\nナビ: ${navUrl(ev)}`)}`);
+        if (ev.location) L.push(`LOCATION:${icsText(ev.location)}`);
+        L.push(...alarm('TRIGGER:PT0M', `出発の時間です: ${ev.title}`));
+        if (S.prep > 0) L.push(...alarm(`TRIGGER:-PT${S.prep}M`, `${S.prep}分後に出発: ${ev.title}`));
+        L.push('END:VEVENT');
+      }
+    }
+    L.push('END:VCALENDAR');
+    return L.join('\r\n');
+  }
+  function download(name, text, type) {
+    const blob = new Blob([text], { type });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }
+  function gcalDepartUrl(ev, p) {
+    return 'https://calendar.google.com/calendar/render?' + new URLSearchParams({
+      action: 'TEMPLATE', text: '🚗 出発: ' + ev.title,
+      dates: `${icsDate(p.departAt)}/${icsDate(p.arriveBy)}`,
+      details: `${clock(p.arriveBy)} 着(開始${p.buffer}分前)\nナビ: ${navUrl(ev)}`,
+      location: ev.location || '',
+    });
+  }
+
+  // =========================================================
+  //  描画
+  // =========================================================
+  let viewDay = todayKey();
+  const $ = s => document.querySelector(s);
+
+  function eventsOf(day) {
+    return events.filter(e => e.day === day)
+      .sort((a, b) => (b.allDay ? 1 : 0) - (a.allDay ? 1 : 0) || a.startMin - b.startMin);
+  }
+
+  function travelHtml(ev, p, risk) {
+    if (p.needsTravel) return `<div class="travel warn">⚠ 所要時間が未設定です。編集して入力すると出発アラームを設定できます</div>`;
+    if (!p.travel) return '';
+    const icon = { car: '🚗', transit: '🚃', walk: '🚶' }[ev.mode];
+    let live = '';
+    if (ev.live && Date.now() - ev.live.at < 15 * MIN) {
+      live = `<div>📡 現在地からの予測: <b>${clock(new Date(ev.live.at + ev.live.dur * MIN))}</b> 着(${ev.live.dur}分・${clock(new Date(ev.live.at))}時点)</div>`;
+    }
+    return `<div class="travel">
+      <div>${icon} <b>${clock(p.departAt)}</b> 出発 → <b>${clock(p.arriveBy)}</b> 着(${p.buffer}分前)${ev.departed ? ' <span class="badge ok">出発済み</span>' : ''}</div>
+      <div class="why">所要 ${p.total}分 = ${p.base}分${p.extra ? ` + 渋滞等 ${p.extra}分` : ''}${p.reasons.length ? '・' + esc(p.reasons.join('・')) : ''}</div>
+      ${live}
+    </div>`;
+  }
+
+  function evHtml(ev, now) {
+    const p = planOf(ev);
+    const risk = riskOf(ev, p, now);
+    const past = (p.end || p.start) < now;
+    const cls = ['ev', p.night && 'night', ev.done && 'done', past && 'past'].filter(Boolean).join(' ');
+    const badges = [];
+    if (p.night) badges.push(`<span class="badge night">🌙 深夜・翌${realTime(ev.startMin)}</span>`);
+    if (risk && risk.level === 'late') badges.push(`<span class="badge late">遅刻の恐れ ${risk.lateMin}分</span>`);
+    else if (risk) badges.push(`<span class="badge tight">ギリギリ</span>`);
+    if (ev.gcalId) badges.push('<span class="badge">GCal</span>');
+    const timeHtml = ev.allDay
+      ? `<div class="t" style="font-size:.85rem">終日</div>`
+      : `<div class="t">${extTime(ev.startMin)}</div>` +
+        (p.night ? `<div class="t2">翌${realTime(ev.startMin)}</div>` : '') +
+        (ev.endMin != null ? `<div class="t2">〜${extTime(ev.endMin)}</div>` : '');
+    const acts = [];
+    if (hasTravelMode(ev) && ev.location) acts.push(`<button class="btn primary" data-act="nav" data-id="${ev.id}">🧭 ナビ</button>`);
+    if (p.travel && ev.mode === 'transit' && transitUrl(ev, p)) acts.push(`<button class="btn" data-act="transit" data-id="${ev.id}">🚃 ${p.buffer}分前着の電車</button>`);
+    if (p.travel && !ev.done) acts.push(`<button class="btn ${ev.departed ? 'on' : ''}" data-act="depart" data-id="${ev.id}">${ev.departed ? '✓ 出発済み' : '出発した'}</button>`);
+    if (!ev.done && p.start.getTime() + 60 * MIN > now) acts.push(`<button class="btn" data-act="late" data-id="${ev.id}">✉️ 遅れる連絡</button>`);
+    if (!ev.allDay) acts.push(`<button class="btn" data-act="ics" data-id="${ev.id}">📅 アラーム登録</button>`);
+    acts.push(`<button class="btn" data-act="done" data-id="${ev.id}">${ev.done ? '↺ 戻す' : '✓ 完了'}</button>`);
+    acts.push(`<button class="btn" data-act="edit" data-id="${ev.id}">編集</button>`);
+    return `<div class="${cls}">
+      <div class="ev-time">${timeHtml}</div>
+      <div class="ev-main">
+        <div class="ev-title">${esc(ev.title)}<span class="badges">${badges.join('')}</span></div>
+        ${ev.location ? `<div class="ev-sub">📍 ${esc(ev.location)}</div>` : ''}
+        ${ev.notes ? `<div class="ev-sub">📝 ${esc(ev.notes)}</div>` : ''}
+        ${travelHtml(ev, p, risk)}
+        <div class="actions">${acts.join('')}</div>
+      </div>
+    </div>`;
+  }
+
+  function render() {
+    const now = new Date();
+    const today = todayKey();
+    const d = dateOf(viewDay);
+    const rel = { [today]: '今日', [addDays(today, 1)]: '明日', [addDays(today, -1)]: '昨日' }[viewDay];
+    $('#day-title').textContent = `${d.getMonth() + 1}月${d.getDate()}日(${WD[d.getDay()]})${rel ? ' · ' + rel : ''}`;
+    $('#day-range').textContent = `${extTime(S.boundary)} 〜 翌${extTime(S.boundary)} の予定を表示`;
+    $('#today-btn').hidden = viewDay === today;
+
+    // タイムライン
+    const list = eventsOf(viewDay);
+    $('#count').textContent = list.length ? `${list.filter(e => e.done).length}/${list.length} 完了` : '';
+    let html = '', nightShown = false, nowShown = viewDay !== today;
+    for (const ev of list) {
+      if (!ev.allDay && !nowShown && at(viewDay, ev.startMin) > now) {
+        html += `<div class="nowline">いま ${clock(now)}</div>`; nowShown = true;
+      }
+      if (!ev.allDay && ev.startMin >= 1440 && !nightShown) {
+        html += `<div class="divider">🌙 ここから日付が変わります(${mdw(addDays(viewDay, 1))} 0:00〜)— でも${mdw(viewDay)}の夜の予定です</div>`;
+        nightShown = true;
+      }
+      html += evHtml(ev, now);
+    }
+    if (list.length && !nowShown) html += `<div class="nowline">いま ${clock(now)}</div>`;
+    $('#timeline').innerHTML = html || `<div class="empty">予定はありません。右下の ＋ から追加できます</div>`;
+
+    renderAlerts(now, today);
+    renderNext(now, today);
+    renderTodos();
+    renderUpcoming(today);
+  }
+
+  function renderAlerts(now, today) {
+    const out = [];
+    // 遅刻リスク(今日と昨日の活動日)
+    for (const ev of events.filter(e => e.day === today || e.day === addDays(today, -1) || e.day === addDays(today, 1))) {
+      const p = planOf(ev);
+      const r = riskOf(ev, p, now);
+      if (!r) continue;
+      if (r.level === 'late') {
+        out.push(`<div class="alert late">
+          <div class="a-title">⚠ 「${esc(ev.title)}」に約${r.lateMin}分遅刻しそうです</div>
+          <div class="a-body">${ev.live && Date.now() - ev.live.at < 15 * MIN ? '現在地からの交通状況で' : 'いま出発すると'} ${clock(r.eta)} 着の見込み(開始 ${extTime(ev.startMin)})</div>
+          <div class="actions"><button class="btn danger" data-act="late" data-id="${ev.id}">✉️ 遅刻の連絡文を作る</button>
+          ${ev.departed ? '' : `<button class="btn primary" data-act="nav" data-id="${ev.id}">🧭 すぐ出発</button>`}</div>
+        </div>`);
+      } else {
+        out.push(`<div class="alert tight">
+          <div class="a-title">⏰ 「${esc(ev.title)}」— ${ev.departed ? '到着がギリギリです' : 'もう出発時刻です'}</div>
+          <div class="a-body">${clock(r.eta)} 着の見込み(${p.buffer}分前到着の目標 ${clock(p.arriveBy)})</div>
+          <div class="actions"><button class="btn primary" data-act="nav" data-id="${ev.id}">🧭 ナビ開始</button>
+          ${ev.departed ? '' : `<button class="btn" data-act="depart" data-id="${ev.id}">出発した</button>`}</div>
+        </div>`);
+      }
+    }
+    // 今夜の深夜予定
+    if (viewDay === today) {
+      const nights = eventsOf(today).filter(e => !e.done && !e.allDay && e.startMin >= 1440 && at(today, e.startMin) > now);
+      if (nights.length) {
+        out.push(`<div class="alert night">
+          <div class="a-title">🌙 今夜、日付が変わってから予定があります</div>
+          <div class="a-body">${nights.map(e => `${extTime(e.startMin)}(翌${realTime(e.startMin)}) ${esc(e.title)}`).join('<br>')}<br>寝る前にアラームを確認しておきましょう。</div>
+        </div>`);
+      }
+    }
+    $('#alerts').innerHTML = out.join('');
+  }
+
+  function renderNext(now, today) {
+    // 今日〜明日の活動日で、次にやるべきこと(出発 or 開始)
+    let best = null;
+    for (const ev of events) {
+      if (ev.done || ev.allDay || (ev.day !== today && ev.day !== addDays(today, 1))) continue;
+      const p = planOf(ev);
+      const t = p.travel && !ev.departed ? p.departAt : p.start;
+      if (p.start < now) continue;
+      if (!best || t < best.t) best = { ev, p, t, depart: p.travel && !ev.departed };
+    }
+    if (!best) { $('#next').innerHTML = ''; return; }
+    const { ev, p, t, depart } = best;
+    const left = t - now;
+    $('#next').innerHTML = `<div class="card next">
+      <div class="label">${depart ? '次の出発まで' : '次の予定まで'}</div>
+      <div class="count">${left <= 0 ? 'いま!' : dur(left)} <small>${clock(t)}${depart ? ' 出発' : ' 開始'}</small></div>
+      <div class="what">${p.night ? '🌙 ' : ''}<b>${esc(ev.title)}</b> — ${ev.day === today ? '' : mdw(ev.day) + ' '}${extTime(ev.startMin)}${p.night ? `(翌${realTime(ev.startMin)})` : ''} 開始</div>
+      ${depart ? `<div class="route">${clock(p.arriveBy)} 着 = 開始${p.buffer}分前 / 所要 ${p.total}分${p.extra ? `(渋滞等 +${p.extra}分込み)` : ''}</div>
+        <div class="actions"><button class="btn primary" data-act="nav" data-id="${ev.id}">🧭 ナビ</button><button class="btn" data-act="ics" data-id="${ev.id}">📅 出発アラームを登録</button></div>` : ''}
+    </div>`;
+  }
+
+  function renderTodos() {
+    const list = todos.filter(t => t.day === viewDay);
+    $('#todos').innerHTML = list.map(t => `<div class="todo ${t.done ? 'done' : ''}">
+      <input type="checkbox" data-todo="${t.id}" ${t.done ? 'checked' : ''} aria-label="完了">
+      <span class="tx">${esc(t.text)}</span>
+      <button class="del" data-todo-del="${t.id}" aria-label="削除">×</button></div>`).join('')
+      || `<div class="empty" style="padding:12px">やることはありません</div>`;
+  }
+
+  function renderUpcoming(today) {
+    const rows = [];
+    for (let i = 1; i <= 14; i++) {
+      const k = addDays(viewDay, i);
+      const list = eventsOf(k).filter(e => !e.done);
+      if (!list.length) continue;
+      const nights = list.filter(e => !e.allDay && e.startMin >= 1440).length;
+      rows.push(`<button class="up" data-goto="${k}">
+        <span class="ud">${mdw(k)}${k === addDays(today, 1) ? ' 明日' : ''}</span>
+        <span class="ut">${list.map(e => (e.allDay ? '終日 ' : extTime(e.startMin) + ' ') + esc(e.title)).join(' / ')}</span>
+        ${nights ? `<span class="badge night">🌙${nights}</span>` : ''}<span class="muted">›</span></button>`);
+    }
+    $('#upcoming').innerHTML = rows.join('') || `<div class="empty">2週間以内の予定はありません</div>`;
+  }
+
+  // =========================================================
+  //  予定フォーム
+  // =========================================================
+  const evSheet = $('#ev-sheet');
+  let editing = null; // 編集中の予定(新規はnull)
+  let formMode = 'none';
+  let formApi = null;  // フォーム上で取得したAPI結果
+
+  function setMode(m) {
+    formMode = m;
+    document.querySelectorAll('#f-mode button').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+    $('#travel-fields').hidden = m === 'none';
+    $('#f-highway-row').hidden = m !== 'car';
+    $('#f-fetch').hidden = !S.apiKey;
+    updateFormPreview();
+  }
+
+  function formDraft() {
+    const s = parseTime($('#f-start').value);
+    const e = parseTime($('#f-end').value);
+    let endMin = e && !e.error ? e.min : null;
+    if (endMin != null && s && !s.error && endMin <= s.min) endMin += 1440;
+    return {
+      id: editing ? editing.id : uid(),
+      title: $('#f-title').value.trim(),
+      day: $('#f-day').value,
+      startMin: s && !s.error ? s.min : null,
+      endMin,
+      mode: formMode,
+      location: $('#f-location').value.trim(),
+      origin: $('#f-origin').value.trim(),
+      travelMin: num($('#f-travel').value, 0),
+      buffer: num($('#f-buffer').value, S.buffer),
+      highway: $('#f-highway').checked,
+      rain: $('#f-rain').checked,
+      remind: num($('#f-remind').value, 15),
+      contactName: $('#f-cname').value.trim(),
+      contactTo: $('#f-cto').value.trim(),
+      notes: $('#f-notes').value.trim(),
+      _s: s, _e: e,
+    };
+  }
+
+  function updateFormPreview() {
+    const dr = formDraft();
+    const pv = $('#f-time-preview'), hint = $('#f-time-hint');
+    pv.className = 'preview';
+    if (!dr._s) { pv.textContent = ''; hint.textContent = `数字だけでOK: 2400 → 24:00 / 930 → 9:30。${extTime(S.boundary)}より前の時刻は自動で「その日の深夜」になります`; }
+    else if (dr._s.error) { pv.textContent = dr._s.error; pv.classList.add('err'); hint.textContent = ''; }
+    else if (dr.day) {
+      const real = at(dr.day, dr.startMin);
+      if (dr.startMin >= 1440) {
+        pv.classList.add('night');
+        pv.textContent = `🌙 ${mdw(dr.day)}の ${extTime(dr.startMin)}(= ${mdw(keyOf(real))} ${clock(real)})`;
+        hint.textContent = `カレンダー上は翌日ですが、${mdw(dr.day)}の夜の予定として表示します。`;
+      } else {
+        pv.textContent = `${mdw(dr.day)} ${clock(real)}${dr.endMin != null ? ' 〜 ' + extTime(dr.endMin) : ''}`;
+        hint.textContent = '';
+      }
+    }
+    // 出発計画のプレビュー
+    const box = $('#f-plan');
+    if (dr.startMin == null || !dr.day || dr.mode === 'none') { box.hidden = true; return; }
+    const tmp = Object.assign({}, editing || {}, dr, { api: formApi });
+    const p = planOf(tmp);
+    box.hidden = false;
+    if (!p.travel) { box.innerHTML = '所要時間を入れると、出発時刻とアラームを自動で計算します。'; return; }
+    box.innerHTML = `${S.prep > 0 ? `準備開始 <b>${clock(p.prepAt)}</b> → ` : ''}出発 <b>${clock(p.departAt)}</b> → 到着 <b>${clock(p.arriveBy)}</b>(開始${p.buffer}分前)<br>
+      <span class="muted">所要 ${p.total}分 = ${p.base}分${p.extra ? ' + 渋滞等' + p.extra + '分' : ''}${p.reasons.length ? '(' + esc(p.reasons.join('・')) + ')' : ''}</span>`;
+  }
+
+  function openForm(ev, presetDay) {
+    editing = ev || null;
+    formApi = ev && ev.api ? ev.api : null;
+    $('#ev-sheet-title').textContent = ev ? '予定を編集' : '予定を追加';
+    $('#f-title').value = ev ? ev.title : '';
+    $('#f-day').value = ev ? ev.day : (presetDay || viewDay);
+    $('#f-start').value = ev && !ev.allDay ? extTime(ev.startMin) : '';
+    $('#f-end').value = ev && ev.endMin != null ? extTime(ev.endMin) : '';
+    $('#f-location').value = ev ? ev.location || '' : '';
+    $('#f-origin').value = ev ? ev.origin || '' : '';
+    $('#f-travel').value = ev && ev.travelMin ? ev.travelMin : '';
+    $('#f-buffer').value = ev && ev.buffer != null ? ev.buffer : S.buffer;
+    $('#f-highway').checked = ev ? !!ev.highway : false;
+    $('#f-rain').checked = ev ? !!ev.rain : false;
+    $('#f-remind').value = String(ev && ev.remind != null ? ev.remind : 15);
+    $('#f-cname').value = ev ? ev.contactName || '' : '';
+    $('#f-cto').value = ev ? ev.contactTo || '' : '';
+    $('#f-notes').value = ev ? ev.notes || '' : '';
+    $('#f-delete').hidden = !ev;
+    setMode(ev ? ev.mode || 'none' : S.defaultMode);
+    evSheet.showModal();
+    if (!ev) setTimeout(() => $('#f-title').focus(), 50);
+  }
+
+  evSheet.addEventListener('input', updateFormPreview);
+  evSheet.addEventListener('change', updateFormPreview);
+  document.querySelectorAll('#f-mode button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+  $('#ev-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const dr = formDraft();
+    if (!dr.title) { toast('タイトルを入力してください'); $('#f-title').focus(); return; }
+    if (!dr.day) { toast('日付を選んでください'); return; }
+    if (!dr._s || dr._s.error) { toast('開始時刻を入力してください(例: 2400)'); $('#f-start').focus(); return; }
+    delete dr._s; delete dr._e;
+    const base = editing || { done: false, departed: false };
+    const ev = Object.assign({}, base, dr);
+    ev.api = formApi && formApi.sig === travelSig(ev) ? formApi : null;
+    if (editing && travelSig(editing) !== travelSig(ev)) { ev.departed = false; ev.live = null; }
+    const i = events.findIndex(x => x.id === ev.id);
+    if (i >= 0) events[i] = ev; else events.push(ev);
+    saveEvents();
+    evSheet.close();
+    viewDay = ev.day;
+    render(); checkAlarms();
+    const p = planOf(ev);
+    toast(p.travel ? `保存しました。${clock(p.departAt)} に出発アラームが鳴ります` : '保存しました');
+  });
+
+  $('#f-delete').addEventListener('click', () => {
+    if (!editing || !confirm(`「${editing.title}」を削除しますか?`)) return;
+    events = events.filter(e => e.id !== editing.id);
+    saveEvents(); evSheet.close(); render();
+  });
+
+  $('#f-fetch').addEventListener('click', async () => {
+    const dr = formDraft();
+    if (!dr.location) { toast('目的地を入力してください'); return; }
+    if (!dr.day || dr.startMin == null) { toast('日付と開始時刻を先に入力してください'); return; }
+    const btn = $('#f-fetch'); btn.disabled = true; btn.textContent = '取得中…';
+    try {
+      const ev = Object.assign({}, editing || {}, dr);
+      formApi = await fetchTravel(ev);
+      if (!$('#f-travel').value) $('#f-travel').value = formApi.static;
+      toast(`渋滞込み ${formApi.duration}分(渋滞なし ${formApi.static}分)`);
+    } catch (err) { toast('取得できませんでした: ' + err.message); }
+    finally { btn.disabled = false; btn.textContent = '🌐 Googleで渋滞込みの所要時間を取得'; updateFormPreview(); }
+  });
+
+  // =========================================================
+  //  Google Routes API(任意)
+  // =========================================================
+  function waypoint(o) {
+    if (o && typeof o === 'object') return { location: { latLng: { latitude: o.lat, longitude: o.lng } } };
+    return { address: o };
+  }
+  async function routes({ origin, destination, mode, highway, departureTime, arrivalTime }) {
+    const travelMode = { car: 'DRIVE', transit: 'TRANSIT', walk: 'WALK' }[mode] || 'DRIVE';
+    const body = { origin: waypoint(origin), destination: waypoint(destination), travelMode, languageCode: 'ja', regionCode: 'JP' };
+    if (travelMode === 'DRIVE') {
+      body.routingPreference = 'TRAFFIC_AWARE_OPTIMAL';
+      body.routeModifiers = { avoidHighways: !highway };
+      if (departureTime) body.departureTime = departureTime.toISOString();
+    }
+    if (travelMode === 'TRANSIT' && arrivalTime) body.arrivalTime = arrivalTime.toISOString();
+    const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': S.apiKey,
+        'X-Goog-FieldMask': 'routes.duration,routes.staticDuration,routes.distanceMeters',
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data.error && data.error.message) || 'HTTP ' + res.status);
+    const r = data.routes && data.routes[0];
+    if (!r) throw new Error('ルートが見つかりませんでした');
+    const sec = s => parseInt(String(s || '0').replace('s', ''), 10) || 0;
+    return { duration: Math.ceil(sec(r.duration) / 60), static: Math.ceil(sec(r.staticDuration || r.duration) / 60) };
+  }
+  // 「到着したい時刻」から逆算して出発時刻の交通予測を取る(2回反復で収束させる)
+  async function fetchTravel(ev) {
+    if (!S.apiKey) throw new Error('APIキーが未設定です');
+    const origin = originOf(ev) || await currentPos();
+    const start = at(ev.day, ev.startMin);
+    const arriveBy = new Date(start - num(ev.buffer, S.buffer) * MIN);
+    const soon = () => new Date(Date.now() + 60000);
+    let r;
+    if (ev.mode === 'transit' || ev.mode === 'walk') {
+      r = await routes({ origin, destination: ev.location, mode: ev.mode, arrivalTime: arriveBy > soon() ? arriveBy : null });
+    } else {
+      let dep = new Date(arriveBy - (ev.travelMin || 30) * MIN);
+      for (let i = 0; i < 2; i++) {
+        r = await routes({ origin, destination: ev.location, mode: ev.mode, highway: ev.highway, departureTime: dep > soon() ? dep : null });
+        dep = new Date(arriveBy - r.duration * MIN);
+      }
+    }
+    return { duration: r.duration, static: r.static, at: Date.now(), sig: travelSig(ev) };
+  }
+  function currentPos() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) return reject(new Error('位置情報が使えません'));
+      navigator.geolocation.getCurrentPosition(
+        pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => reject(new Error('現在地を取得できませんでした(出発地か自宅を設定してください)')),
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 });
+    });
+  }
+  // 出発90分前〜開始までは、現在地から到着予測を更新して遅刻を検知
+  let lastLive = 0, liveBusy = false;
+  async function liveCheck(force) {
+    if (!S.apiKey || !S.live || liveBusy || document.hidden) return;
+    const now = new Date();
+    if (!force && now - lastLive < 5 * MIN) return;
+    const targets = events.filter(ev => {
+      if (ev.done || !hasTravelMode(ev) || !ev.location) return false;
+      const p = planOf(ev);
+      return p.travel && now < p.start && p.departAt - now < 90 * MIN;
+    });
+    if (!targets.length) return;
+    liveBusy = true; lastLive = now.getTime();
+    try {
+      const pos = await currentPos();
+      for (const ev of targets) {
+        const r = await routes({ origin: pos, destination: ev.location, mode: ev.mode, highway: ev.highway });
+        ev.live = { at: Date.now(), dur: r.duration };
+      }
+      saveEvents(); render(); checkAlarms();
+    } catch (e) { console.warn('live check', e); }
+    finally { liveBusy = false; }
+  }
+
+  // =========================================================
+  //  遅刻連絡メッセージ
+  // =========================================================
+  const msgSheet = $('#msg-sheet');
+  let msgEv = null;
+  const REASONS = {
+    jam: ['道路の渋滞に巻き込まれてしまい', '道が渋滞してて', '渋滞のため'],
+    highway: ['高速道路が渋滞しており', '高速が渋滞してて', '高速道路の渋滞のため'],
+    train: ['電車が遅延しており', '電車が遅れてて', '電車遅延のため'],
+    prev: ['前の予定が押してしまい', '前の予定が押しちゃって', '前の予定が延びたため'],
+    depart: ['こちらの出発が遅れてしまい', '出るのが遅くなっちゃって', '出発が遅れたため'],
+    sick: ['体調が優れず', '体調がちょっと悪くて', '体調不良のため'],
+    none: ['', '', ''],
+  };
+
+  function whenText(ev) {
+    const today = todayKey();
+    const t = extTime(ev.startMin);
+    if (ev.day === today) return ev.startMin >= 1440 ? `今夜${t}` : `本日${t}`;
+    if (ev.day === addDays(today, 1)) return `明日${t}`;
+    const d = dateOf(ev.day);
+    return `${d.getMonth() + 1}月${d.getDate()}日${t}`;
+  }
+
+  function buildMessage() {
+    const ev = msgEv; if (!ev) return '';
+    const n = Math.max(1, num($('#m-min').value, 10));
+    const reason = REASONS[$('#m-reason').value] || REASONS.none;
+    const name = $('#m-name').value.trim();
+    const me = S.myName || '(名前)';
+    const eta = new Date(at(ev.day, ev.startMin).getTime() + n * MIN);
+    const online = isOnline(ev);
+    const when = whenText(ev);
+    switch ($('#m-style').value) {
+      case 'casual':
+        return `${name ? name + 'さん、' : ''}ごめんなさい🙏\n${reason[1] ? reason[1] + '、' : ''}${ev.title}に${n}分くらい遅れそうです…!\n${clock(eta)}頃${online ? 'には入れます' : 'に着きます'}。先に始めててください!`;
+      case 'short':
+        return `【遅れます】${me}です。${reason[2] ? reason[2] + '、' : ''}${when}〜の「${ev.title}」に${n}分ほど遅れます(${clock(eta)}頃${online ? '参加' : '到着'}予定)。申し訳ありません。`;
+      default:
+        return `${name ? name + '様\n\n' : ''}お疲れ様です。${me}です。\n` +
+          `大変申し訳ございません。${reason[0] ? reason[0] + '、' : ''}${when}からの「${ev.title}」に${n}分ほど遅れてしまう見込みです。\n` +
+          (online
+            ? `${clock(eta)}頃には参加できる予定です。お待たせしてしまう場合は、先に始めていただけますと幸いです。\n`
+            : `${clock(eta)}頃に到着予定です。到着次第、すぐに合流いたします。\n`) +
+          `ご迷惑をおかけしてしまい、誠に申し訳ございません。`;
+    }
+  }
+  function refreshMsg() { $('#m-text').value = buildMessage(); }
+
+  function openMsg(ev) {
+    msgEv = ev;
+    const p = planOf(ev);
+    const r = riskOf(ev, p);
+    const n = r && r.lateMin > 0 ? ceil5(r.lateMin) : 10;
+    $('#m-min').value = n;
+    $('#m-reason').value = r ? r.reason : (ev.mode === 'transit' ? 'train' : ev.mode === 'car' ? 'jam' : 'prev');
+    $('#m-name').value = ev.contactName || '';
+    $('#m-info').innerHTML = `<b>${esc(ev.title)}</b>(${mdw(ev.day)} ${extTime(ev.startMin)}${p.night ? ` = 翌${realTime(ev.startMin)}` : ''})` +
+      (r && r.level === 'late' ? `<br>予測: ${clock(r.eta)} 着 → 約${r.lateMin}分の遅れ(5分単位で切り上げて ${n}分 にしています)` : '');
+    refreshMsg();
+    msgSheet.showModal();
+  }
+  ['#m-min', '#m-style', '#m-reason', '#m-name'].forEach(s => {
+    $(s).addEventListener('input', refreshMsg); $(s).addEventListener('change', refreshMsg);
+  });
+  const msgText = () => $('#m-text').value;
+  async function copyText(t) {
+    try { await navigator.clipboard.writeText(t); }
+    catch {
+      const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); ta.remove();
+    }
+  }
+  $('#m-copy').addEventListener('click', async () => { await copyText(msgText()); toast('コピーしました'); });
+  $('#m-share').addEventListener('click', async () => {
+    if (navigator.share) { try { await navigator.share({ text: msgText() }); } catch {} }
+    else { await copyText(msgText()); toast('共有に未対応のためコピーしました'); }
+  });
+  $('#m-line').addEventListener('click', () => { location.href = 'https://line.me/R/msg/text/?' + encodeURIComponent(msgText()); });
+  $('#m-mail').addEventListener('click', () => {
+    const to = msgEv && /@/.test(msgEv.contactTo || '') ? msgEv.contactTo : '';
+    location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent('【遅延のご連絡】' + (msgEv ? msgEv.title : ''))}&body=${encodeURIComponent(msgText())}`;
+  });
+  $('#m-sms').addEventListener('click', () => {
+    const to = msgEv && /^[\d+\-() ]+$/.test(msgEv.contactTo || '') ? msgEv.contactTo.replace(/[^\d+]/g, '') : '';
+    location.href = `sms:${to}?&body=${encodeURIComponent(msgText())}`;
+  });
+
+  // =========================================================
+  //  アラーム
+  // =========================================================
+  let actx = null;
+  function unlockAudio() {
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+    } catch {}
+  }
+  document.addEventListener('pointerdown', unlockAudio);
+
+  let beepTimer = null, beepStop = null;
+  function startBeep() {
+    stopBeep();
+    const beep = () => {
+      if (!actx) return;
+      const t0 = actx.currentTime;
+      [0, 0.22, 0.44].forEach(off => {
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.type = 'square'; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, t0 + off);
+        g.gain.exponentialRampToValueAtTime(0.25, t0 + off + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.18);
+        o.connect(g).connect(actx.destination); o.start(t0 + off); o.stop(t0 + off + 0.2);
+      });
+      if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]);
+    };
+    beep();
+    beepTimer = setInterval(beep, 1500);
+    beepStop = setTimeout(stopBeep, 3 * 60 * 1000);
+  }
+  function stopBeep() { clearInterval(beepTimer); clearTimeout(beepStop); beepTimer = null; }
+
+  async function notify(title, body, tag) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const opts = { body, tag, renotify: true, requireInteraction: true, icon: 'icon-180.png', vibrate: [300, 150, 300] };
+    try {
+      const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+      if (reg) return reg.showNotification(title, opts);
+      new Notification(title, opts);
+    } catch (e) { console.warn(e); }
+  }
+
+  const alarmDlg = $('#alarm');
+  const alarmQueue = [];
+  function showAlarm(a) {
+    alarmQueue.push(a);
+    if (!alarmDlg.open) nextAlarm();
+  }
+  function nextAlarm() {
+    const a = alarmQueue.shift();
+    if (!a) { stopBeep(); return; }
+    $('#al-icon').textContent = a.icon;
+    $('#al-title').textContent = a.title;
+    $('#al-body').textContent = a.body;
+    $('#al-actions').innerHTML = (a.actions || []).map(([act, label, cls]) =>
+      `<button class="btn ${cls || ''}" data-act="${act}" data-id="${a.id || ''}" data-alarm="1">${label}</button>`).join('') +
+      `<button class="btn" data-act="alarm-stop" data-alarm="1">止める</button>`;
+    if (!alarmDlg.open) alarmDlg.showModal();
+    startBeep();
+  }
+
+  function alarmsFor(ev, p) {
+    const out = [];
+    if (ev.done || ev.allDay) return out;
+    const t = ev.title;
+    if (p.travel && !ev.departed) {
+      if (p.prepAt) out.push({ key: `${ev.id}:prep:${+p.prepAt}`, at: p.prepAt, icon: '🧥', title: `${S.prep}分後に出発です`,
+        body: `「${t}」\n${clock(p.departAt)} 出発 → ${clock(p.arriveBy)} 着`, actions: [['nav', '🧭 ナビを確認', 'primary']] });
+      out.push({ key: `${ev.id}:depart:${+p.departAt}`, at: p.departAt, icon: '🚗', title: '出発の時間です!',
+        body: `「${t}」${extTime(ev.startMin)} 開始\n${clock(p.arriveBy)} 着(${p.buffer}分前)・所要 ${p.total}分${p.extra ? `(渋滞等 +${p.extra}分)` : ''}`,
+        actions: [['nav', '🧭 ナビ開始', 'primary'], ['depart', '出発した']] });
+    }
+    if (!p.travel) {
+      const rm = num(ev.remind, 15);
+      if (rm >= 0) out.push({ key: `${ev.id}:remind:${+p.start - rm * MIN}`, at: new Date(p.start - rm * MIN), icon: p.night ? '🌙' : '⏰',
+        title: rm ? `${rm}分後に開始` : '開始時刻です', body: `「${t}」${extTime(ev.startMin)}${p.night ? `(翌${realTime(ev.startMin)})` : ''}`,
+        actions: isOnline(ev) && /^https?:/.test(ev.location || '') ? [['open-url', '参加URLを開く', 'primary']] : [] });
+    }
+    if (p.night && S.nightAlert >= 0) {
+      const na = at(ev.day, S.nightAlert);
+      if (na < p.start) out.push({ key: `${ev.id}:night:${+na}`, at: na, icon: '🌙', title: '今夜、深夜の予定があります',
+        body: `${extTime(ev.startMin)}(翌${realTime(ev.startMin)})「${t}」\n寝落ちしないよう注意!`, actions: [['ics', '📅 カレンダーにも登録']] });
+    }
+    return out.map(a => Object.assign(a, { id: ev.id }));
+  }
+
+  function checkAlarms() {
+    const now = new Date();
+    const today = todayKey();
+    const days = [addDays(today, -1), today, addDays(today, 1)];
+    let changed = false;
+    for (const ev of events.filter(e => days.includes(e.day))) {
+      const p = planOf(ev);
+      for (const a of alarmsFor(ev, p)) {
+        if (fired[a.key] || a.at > now || now - a.at > 15 * MIN) continue;
+        fired[a.key] = Date.now(); changed = true;
+        showAlarm(a);
+        notify(a.title, a.body.replace(/\n/g, ' / '), a.key);
+      }
+      const r = riskOf(ev, p, now);
+      if (r && r.level === 'late') {
+        const key = `${ev.id}:late:${+p.start}`;
+        if (!fired[key]) {
+          fired[key] = Date.now(); changed = true;
+          const a = { id: ev.id, icon: '⚠️', title: `約${r.lateMin}分 遅刻しそうです`,
+            body: `「${ev.title}」${extTime(ev.startMin)} 開始\n${clock(r.eta)} 着の見込み。連絡文を用意しました。`,
+            actions: [['late', '✉️ 遅刻の連絡文を見る', 'danger'], ['nav', '🧭 ナビ']] };
+          showAlarm(a); notify(a.title, a.body.replace(/\n/g, ' / '), key);
+        }
+      }
+    }
+    // 古い履歴の掃除
+    for (const k in fired) if (Date.now() - fired[k] > 3 * 86400000) { delete fired[k]; changed = true; }
+    if (changed) saveFired();
+  }
+
+  // 待機モード: 画面を消さずにアラームを確実に鳴らす
+  let wakeLock = null, standby = false;
+  async function setStandby(on) {
+    standby = on;
+    $('#standby-btn').classList.toggle('on', on);
+    $('#standby-btn').textContent = on ? '🔔 待機中' : '🔔 待機';
+    if (on) {
+      unlockAudio();
+      try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }
+      catch { toast('画面スリープを止められませんでした。充電しながら画面をつけておいてください'); }
+      if (wakeLock) toast('待機中: 画面をつけたままアラームを待ちます(充電推奨)');
+    } else if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  }
+  $('#standby-btn').addEventListener('click', () => setStandby(!standby));
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) return;
+    if (standby && !wakeLock && 'wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch {} }
+    tick(true);
+  });
+
+  // =========================================================
+  //  アクション(イベント委譲)
+  // =========================================================
+  const findEv = id => events.find(e => e.id === id);
+  document.addEventListener('click', async e => {
+    const goto = e.target.closest('[data-goto]');
+    if (goto) { viewDay = goto.dataset.goto; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    const closeBtn = e.target.closest('[data-close]');
+    if (closeBtn) { closeBtn.closest('dialog').close(); return; }
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const ev = findEv(b.dataset.id);
+    if (b.dataset.alarm) { alarmDlg.close(); stopBeep(); }
+    switch (b.dataset.act) {
+      case 'alarm-stop': break;
+      case 'nav':
+        if (ev) { if (!ev.location) { toast('目的地が未設定です'); break; } window.open(navUrl(ev), '_blank'); }
+        break;
+      case 'transit': { const u = ev && transitUrl(ev, planOf(ev)); if (u) window.open(u, '_blank'); break; }
+      case 'depart':
+        if (ev) { ev.departed = !ev.departed; ev.departedAt = ev.departed ? Date.now() : null; saveEvents(); render(); if (ev.departed) { toast('いってらっしゃい!'); liveCheck(true); } }
+        break;
+      case 'late': if (ev) openMsg(ev); break;
+      case 'done': if (ev) { ev.done = !ev.done; saveEvents(); render(); } break;
+      case 'edit': if (ev) openForm(ev); break;
+      case 'open-url': if (ev) window.open(ev.location, '_blank'); break;
+      case 'ics':
+        if (ev) {
+          const p = planOf(ev);
+          download(`${ev.title.replace(/[\\/:*?"<>|]/g, '_')}.ics`, icsFor([ev]), 'text/calendar');
+          toast(p.travel ? '出発アラーム付きの予定を書き出しました。開いてカレンダーに追加してください' : 'アラーム付きの予定を書き出しました');
+          if (p.travel && /Android/i.test(navigator.userAgent)) {
+            setTimeout(() => { if (confirm('Googleカレンダーに出発予定を直接追加しますか?')) window.open(gcalDepartUrl(ev, p), '_blank'); }, 600);
+          }
+        }
+        break;
+    }
+    if (b.dataset.alarm) nextAlarm();
+  });
+  alarmDlg.addEventListener('cancel', () => stopBeep());
+
+  // ---- 日付移動 ----
+  $('#prev-day').addEventListener('click', () => { viewDay = addDays(viewDay, -1); render(); });
+  $('#next-day').addEventListener('click', () => { viewDay = addDays(viewDay, 1); render(); });
+  $('#today-btn').addEventListener('click', () => { viewDay = todayKey(); render(); });
+  $('#add-btn').addEventListener('click', () => openForm(null, viewDay));
+  // 左右スワイプで日付移動
+  let sx = null, sy = null;
+  $('main').addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+  $('main').addEventListener('touchend', e => {
+    if (sx == null) return;
+    const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) > 80 && Math.abs(dy) < 50) { viewDay = addDays(viewDay, dx < 0 ? 1 : -1); render(); }
+    sx = null;
+  }, { passive: true });
+
+  // ---- やること ----
+  $('#todo-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const v = $('#todo-input').value.trim();
+    if (!v) return;
+    todos.push({ id: uid(), text: v, done: false, day: viewDay });
+    $('#todo-input').value = '';
+    saveTodos(); renderTodos();
+  });
+  $('#todos').addEventListener('change', e => {
+    const t = todos.find(x => x.id === e.target.dataset.todo);
+    if (t) { t.done = e.target.checked; saveTodos(); renderTodos(); }
+  });
+  $('#todos').addEventListener('click', e => {
+    const id = e.target.dataset.todoDel;
+    if (id) { todos = todos.filter(x => x.id !== id); saveTodos(); renderTodos(); }
+  });
+  // 未完了のやることは今日に持ち越し、終わったものは日付が変わったら片付ける
+  function rollTodos() {
+    const today = todayKey();
+    let changed = false;
+    todos = todos.filter(t => {
+      if (t.day >= today) return true;
+      changed = true;
+      if (t.done) return false;
+      t.day = today; return true;
+    });
+    if (changed) saveTodos();
+  }
+
+  // =========================================================
+  //  設定
+  // =========================================================
+  const setSheet = $('#settings-sheet');
+  (function fillSelects() {
+    const b = $('#s-boundary');
+    for (let h = 0; h <= 8; h++) b.add(new Option(`${h}:00`, h * 60));
+    const n = $('#s-night');
+    n.add(new Option('なし', -1));
+    for (let h = 17; h <= 23; h++) n.add(new Option(`当日 ${h}:00`, h * 60));
+  })();
+  function notifyState() {
+    const st = !('Notification' in window) ? 'このブラウザは通知に未対応です(アプリ内アラームは鳴ります)'
+      : Notification.permission === 'granted' ? '✅ 通知は許可されています'
+      : Notification.permission === 'denied' ? '通知がブロックされています(ブラウザ設定から許可してください)'
+      : '通知はまだ許可されていません';
+    $('#s-notify-state').textContent = st + ' / iPhoneは「ホーム画面に追加」して開くと通知を受け取れます。';
+  }
+  $('#settings-btn').addEventListener('click', () => {
+    $('#s-boundary').value = String(S.boundary);
+    $('#s-buffer').value = S.buffer;
+    $('#s-prep').value = S.prep;
+    $('#s-home').value = S.home;
+    $('#s-mode').value = S.defaultMode;
+    $('#s-night').value = String(S.nightAlert);
+    $('#s-nav').value = S.nav;
+    $('#s-name').value = S.myName;
+    $('#s-apikey').value = S.apiKey;
+    $('#s-live').checked = !!S.live;
+    $('#s-client').value = localStorage.getItem(GCAL_CLIENT_KEY) || '';
+    notifyState();
+    setSheet.showModal();
+  });
+  function readSettingsForm() {
+    S = Object.assign(S, {
+      boundary: num($('#s-boundary').value, 300),
+      buffer: Math.max(0, num($('#s-buffer').value, 10)),
+      prep: Math.max(0, num($('#s-prep').value, 15)),
+      home: $('#s-home').value.trim(),
+      defaultMode: $('#s-mode').value,
+      nightAlert: num($('#s-night').value, 1260),
+      nav: $('#s-nav').value,
+      myName: $('#s-name').value.trim(),
+      apiKey: $('#s-apikey').value.trim(),
+      live: $('#s-live').checked,
+    });
+    write(K.settings, S);
+    const cid = $('#s-client').value.trim();
+    try { cid ? localStorage.setItem(GCAL_CLIENT_KEY, cid) : localStorage.removeItem(GCAL_CLIENT_KEY); } catch {}
+  }
+  $('#s-save').addEventListener('click', () => {
+    const oldBoundary = S.boundary;
+    readSettingsForm();
+    if (oldBoundary !== S.boundary) rebucket(oldBoundary);
+    setSheet.close(); viewDay = todayKey(); render(); checkAlarms(); toast('設定を保存しました');
+  });
+  // 区切り時刻を変えたら、既存の予定を新しい区切りで振り分け直す
+  function rebucket(oldB) {
+    for (const ev of events) {
+      if (ev.allDay) continue;
+      const real = at(ev.day, ev.startMin);
+      const day = activityDayOf(real);
+      const len = ev.endMin != null ? ev.endMin - ev.startMin : null;
+      ev.day = day;
+      ev.startMin = Math.round((real - dateOf(day)) / MIN);
+      if (len != null) ev.endMin = ev.startMin + len;
+    }
+    saveEvents();
+  }
+  $('#s-notify').addEventListener('click', async () => {
+    unlockAudio();
+    if (!('Notification' in window)) { notifyState(); return; }
+    try { await Notification.requestPermission(); } catch {}
+    notifyState();
+  });
+  $('#s-test').addEventListener('click', () => {
+    unlockAudio(); setSheet.close();
+    showAlarm({ icon: '⏰', title: 'アラームのテスト', body: '音とバイブが鳴ればOKです。\n(マナーモードでは鳴らないことがあります)' });
+    notify('アラームのテスト', '通知が届けばOKです', 'test');
+  });
+  $('#s-export').addEventListener('click', () => {
+    download(`mytask-backup-${keyOf(new Date())}.json`, JSON.stringify({ events, todos, settings: Object.assign({}, S, { apiKey: '' }) }, null, 2), 'application/json');
+  });
+  $('#s-import').addEventListener('click', () => $('#s-import-file').click());
+  $('#s-import-file').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      if (!Array.isArray(data.events)) throw new Error();
+      if (!confirm(`予定 ${data.events.length} 件を復元します。いまのデータは置き換わります。よろしいですか?`)) return;
+      events = data.events; todos = Array.isArray(data.todos) ? data.todos : [];
+      if (data.settings) { const key = S.apiKey; S = Object.assign({}, DEFAULTS, data.settings); if (!S.apiKey) S.apiKey = key; write(K.settings, S); }
+      saveEvents(); saveTodos(); setSheet.close(); render(); toast('復元しました');
+    } catch { toast('バックアップファイルを読み込めませんでした'); }
+    e.target.value = '';
+  });
+
+  // ---- Googleカレンダー取り込み ----
+  function loadGis() {
+    return new Promise((resolve, reject) => {
+      if (window.google && google.accounts && google.accounts.oauth2) return resolve();
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('Google認証スクリプトを読み込めませんでした'));
+      document.head.appendChild(s);
+    });
+  }
+  function requestToken(clientId) {
+    return new Promise((resolve, reject) => {
+      google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/calendar.readonly',
+        callback: r => r.error ? reject(new Error(r.error_description || r.error)) : resolve(r.access_token),
+        error_callback: err => reject(new Error(err && err.type === 'popup_closed' ? 'ログインがキャンセルされました' : '認証に失敗しました')),
+      }).requestAccessToken();
+    });
+  }
+  $('#s-gcal').addEventListener('click', async () => {
+    readSettingsForm();
+    const clientId = localStorage.getItem(GCAL_CLIENT_KEY);
+    if (!clientId) { toast('OAuth クライアントIDを入力してください(READMEに手順があります)'); return; }
+    if (location.protocol === 'file:') { toast('file:// では認証できません。公開版かローカルサーバーで開いてください'); return; }
+    const btn = $('#s-gcal'); btn.disabled = true;
+    try {
+      await loadGis();
+      const token = await requestToken(clientId);
+      const from = at(todayKey(), S.boundary);
+      const to = new Date(from.getTime() + 60 * 86400000);
+      const items = []; let pageToken = '';
+      do {
+        const q = new URLSearchParams({ timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '250' });
+        if (pageToken) q.set('pageToken', pageToken);
+        const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?' + q, { headers: { Authorization: 'Bearer ' + token } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        items.push(...(data.items || [])); pageToken = data.nextPageToken || '';
+      } while (pageToken && items.length < 1500);
+
+      let added = 0, updated = 0, night = 0;
+      for (const it of items) {
+        if (it.status === 'cancelled') continue;
+        const allDay = !(it.start && it.start.dateTime);
+        let day, startMin, endMin = null;
+        if (allDay) { day = it.start.date; startMin = -1; }
+        else {
+          const sd = new Date(it.start.dateTime);
+          day = activityDayOf(sd);
+          startMin = Math.round((sd - dateOf(day)) / MIN);
+          if (it.end && it.end.dateTime) endMin = Math.round((new Date(it.end.dateTime) - dateOf(day)) / MIN);
+          if (startMin >= 1440) night++;
+        }
+        const fields = { title: it.summary || '(無題)', day, startMin, endMin, allDay, location: it.location || (it.hangoutLink || '') };
+        const ex = events.find(e => e.gcalId === it.id);
+        if (ex) {
+          if (ex.day !== day || ex.startMin !== startMin || ex.title !== fields.title || ex.location !== fields.location || ex.endMin !== endMin) {
+            Object.assign(ex, fields); updated++;
+          }
+        } else {
+          const loc = fields.location;
+          const mode = allDay || !loc || /^https?:/.test(loc) ? 'none' : S.defaultMode;
+          events.push(Object.assign({ id: uid(), gcalId: it.id, mode, done: false, departed: false, remind: 15 }, fields));
+          added++;
+        }
+      }
+      saveEvents(); setSheet.close(); render(); checkAlarms();
+      toast(`${added}件追加・${updated}件更新しました${night ? `(うち深夜の予定 ${night}件は前日の夜に表示)` : ''}`);
+    } catch (err) { toast('取り込みエラー: ' + err.message); }
+    finally { btn.disabled = false; }
+  });
+
+  // =========================================================
+  //  起動
+  // =========================================================
+  let toastTimer;
+  function toast(msg) {
+    const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+  }
+
+  let lastDay = todayKey();
+  function tick(force) {
+    const today = todayKey();
+    if (today !== lastDay) { if (viewDay === lastDay) viewDay = today; lastDay = today; rollTodos(); }
+    checkAlarms();
+    render();
+    liveCheck(force);
+  }
+
+  rollTodos();
+  render();
+  checkAlarms();
+  setInterval(() => tick(false), 20000);
+  liveCheck(false);
+
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+
+  // テスト用に一部を公開
+  window.__tm = { parseTime, planOf, riskOf, activityDayOf, estimateTraffic, icsFor, buildMessage, openMsg, get events() { return events; } };
+})();
+</script>
+</body>
+</html>
